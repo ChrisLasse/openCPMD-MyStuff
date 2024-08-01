@@ -7,6 +7,8 @@ MODULE loadpa_utils
                                              dist_entity
   USE elct,                            ONLY: crge
   USE error_handling,                  ONLY: stopgm
+  USE fft,                             ONLY: tfft,&
+                                             FFT_TYPE_DESCRIPTOR
   USE geq0mod,                         ONLY: geq0
   USE gvec,                            ONLY: epsg,&
                                              epsgx,&
@@ -53,14 +55,15 @@ CONTAINS
     CHARACTER(*), PARAMETER                  :: procedureN = 'loadpa'
 
     INTEGER :: i, i0, ia, iat, icpu, ierr, ig, ihrays, ii, img, in1, in2, &
-      in3, iorb, ip, ipp, ir, is, isub, isub2, isub3, isub4, ixrays, izpl, j, &
+      in3, iorb, ip, ipp, ir, is, isub, isub2, isub3, isub4, izrays, izpl, j, &
       j1, j2, jmax, jmin, k, kmax, kmin, mspace, nh1, nh2, nh3, nthreads,&
-      first, last
+      first, last, offset
     INTEGER, ALLOCATABLE                     :: ihray(:,:), ixray(:,:), &
-                                                mgpa(:,:)
+                                                mgpa(:,:), ind(:), pre_inyh(:,:)
     INTEGER, ALLOCATABLE, DIMENSION(:)       :: thread_buff
     LOGICAL                                  :: oldstatus
     REAL(real_8)                             :: g2, sign, t
+    REAL(real_8), PARAMETER                  :: eps8=1.0E-8_real_8
 
 ! ==--------------------------------------------------------------==
 ! ==  DISTRIBUTION OF PARALLEL WORK                               ==
@@ -74,10 +77,10 @@ CONTAINS
          __LINE__,__FILE__)
     IF (paral%io_parent)WRITE(6,'(/," ",16("PARA"))')
     mspace = (fpar%kr2s*fpar%kr3s)/2 + 1
-    ALLOCATE(ixray(fpar%kr2s,fpar%kr3s),STAT=ierr)
+    ALLOCATE(ixray(fpar%kr1s,fpar%kr2s),STAT=ierr)
     IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
          __LINE__,__FILE__)
-    ALLOCATE(ihray(fpar%kr2s,fpar%kr3s),STAT=ierr)
+    ALLOCATE(ihray(fpar%kr1s,fpar%kr2s),STAT=ierr)
     IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
          __LINE__,__FILE__)
     ALLOCATE(mgpa(fpar%kr2s,fpar%kr3s),STAT=ierr)
@@ -146,83 +149,53 @@ CONTAINS
     ! ==--------------------------------------------------------------==
     CALL dist_entity2(crge%n,parai%nproc,parap%nst12,nblocal=norbpe,iloc=parai%me)
     ! ==--------------------------------------------------------------==
-    ! DISTRIBUTE REAL SPACE YZ-PLANES
+
+!    ALLOCATE(tfft%nr3_ranges(0:parai%nproc-1,2),STAT=ierr)
+!    IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
+!         __LINE__,__FILE__)
+    ALLOCATE(tfft%indx_map(fpar%kr1s,fpar%kr2s),STAT=ierr)
+    IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
+         __LINE__,__FILE__)
+    ALLOCATE(tfft%indx(fpar%kr1s*fpar%kr2s),STAT=ierr)
+    IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
+         __LINE__,__FILE__)
+    ALLOCATE(tfft%ind1(fpar%kr1s*fpar%kr2s),STAT=ierr)
+    IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
+         __LINE__,__FILE__)
+    ALLOCATE(tfft%ind2(fpar%kr1s*fpar%kr2s),STAT=ierr)
+    IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
+         __LINE__,__FILE__)
+
+    tfft%indx_map = 0
+    tfft%indx = 0
+    tfft%ind1 = 0
+    tfft%ind2 = 0
+
     ! ==--------------------------------------------------------------==
-    CALL dist_entity2(spar%nr1s,parai%nproc,parap%nrxpl)
+    ! DISTRIBUTE REAL SPACE XY-PLANES
+    ! ==--------------------------------------------------------------==
+!CLR: Currently not used, maybe activated again at a later time
+!    CALL dist_entity2(spar%nr3s,parai%nproc,tfft%nr3_ranges)
     CALL zeroing(parap%nrzpl)!,2*(maxcpu+1))
-    IF (isos1%tclust.AND.isos3%ps_type.EQ.1) THEN      
+    IF (isos1%tclust.AND.isos3%ps_type.EQ.1) THEN
+!CLR: Whatever case this is: it will probably not work if triggered
        ! DISTRIBUTE REAL SPACE XY-PLANES
        CALL dist_entity2(2*spar%nr3s,parai%nproc,parap%nrzpl)
     ENDIF
     ! ==--------------------------------------------------------------==
-    ! DISTRIBUTE G-VECTORS
+    ! DISTRIBUTE G-VECTORS AND MARK ASSOCIATED RAYS
     ! ==--------------------------------------------------------------==
     CALL tiset(procedureN//'_c',isub4)
-    CALL xfft(ixray,gcutwmax)
-    CALL xfft(ihray,gvec_com%gcut)
-    ixrays = 0
-    !$omp parallel do __COLLAPSE2 &
-    !$omp             private(I,J) &
-    !$omp             shared(fpar) &
-    !$omp             reduction(+:IXRAYS)
-    DO j=1,fpar%kr3s
-       DO i=1,fpar%kr2s
-          IF (ixray(i,j).NE.0) THEN
-             ixrays=ixrays+1
-          ENDIF
-       ENDDO
-    ENDDO
-    !$omp end parallel do
-    ipp=0
-    DO ii=1,ixrays
-       ipp=ipp+1
-       ip=MOD(ipp,2*parai%nproc)
-       IF (ip.EQ.0) THEN
-          ip=2*parai%nproc
-       ENDIF
-       IF (ip.GT.parai%nproc) THEN
-          ip=2*parai%nproc+1-ip
-       ENDIF
-       CALL iraymax(fpar%kr2s,fpar%kr3s,ixray,i,j,thread_buff,nthreads)
-       ixray(i,j)=-ip
-    ENDDO
+    CALL zfft(ixray,gcutwmax)
+    CALL zfft(ihray,gvec_com%gcut)
+
+    CALL Distribute_Sticks( fpar%kr1s, fpar%kr2s, ixray )
+    CALL Distribute_Sticks( fpar%kr1s, fpar%kr2s, ihray, ixray )
+
+    CALL czfft(ixray,gcutwmax)
+    CALL czfft(ihray,gvec_com%gcut)
+
     CALL tihalt(procedureN//'_c',isub4)
-    ! ==--------------------------------------------------------------==
-    ! MARK ASSOCIATED RAYS   
-    ! ==--------------------------------------------------------------==
-    CALL tiset(procedureN//'_b',isub3)
-    CALL cxfft(ixray,gcutwmax)
-    ihrays=0
-    !$omp parallel do __COLLAPSE2 &
-    !$omp             private(I,J) &
-    !$omp             shared(fpar) &
-    !$omp             reduction(+:IHRAYS)
-    DO j=1,fpar%kr3s
-       DO i=1,fpar%kr2s
-          IF (ixray(i,j).NE.0) THEN
-             ihray(i,j)=ixray(i,j)
-          ENDIF
-          IF (ihray(i,j).GT.0) THEN
-             ihrays=ihrays+1
-          ENDIF
-       ENDDO
-    ENDDO
-    !$omp end parallel do
-    DO ii=1,ihrays
-       ipp=ipp+1
-       ip=MOD(ipp,2*parai%nproc)
-       IF (ip.EQ.0) THEN
-          ip=2*parai%nproc
-       ENDIF
-       IF (ip.GT.parai%nproc) THEN
-          ip=2*parai%nproc+1-ip
-       ENDIF
-       CALL iraymax(fpar%kr2s,fpar%kr3s,ihray,i,j,thread_buff,nthreads)
-       ihray(i,j)=-ip
-    ENDDO
-    ! MARK ASSOCIATED RAYS   
-    CALL cxfft(ihray,gvec_com%gcut)
-    CALL tihalt(procedureN//'_b',isub3)
     ! ==--------------------------------------------------------------==
     ! ALLOCATE THE GLOBAL DATA ARRAYS
     ! ==--------------------------------------------------------------==
@@ -232,7 +205,11 @@ CONTAINS
     ncpw%ngw=INT(REAL(spar%ngws,kind=real_8)/REAL(parai%nproc,kind=real_8)*1.2_real_8)
     ncpw%ngw=MIN(ncpw%ngw,spar%ngws)
     ncpw%ngw=MAX(ncpw%ngw,100)
+
     ALLOCATE(hg(ncpw%nhg),STAT=ierr)
+    IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
+         __LINE__,__FILE__)
+    ALLOCATE(pre_inyh(3,ncpw%nhg),STAT=ierr)
     IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
          __LINE__,__FILE__)
     ALLOCATE(inyh(3,ncpw%nhg),STAT=ierr)
@@ -260,22 +237,22 @@ CONTAINS
     ig=0
     ncpw%ngw=0
     ncpw%nhg=0
-    DO i=0,parm%nr1-1
-       jmin=-parm%nr2+1
-       jmax=parm%nr2-1
+    DO i=0,parm%nr3-1
+       jmin=-parm%nr1+1
+       jmax=parm%nr1-1
        IF (i.EQ.0) THEN
           jmin=0
        ENDIF
        DO j=jmin,jmax
-          kmin=-parm%nr3+1
-          kmax=parm%nr3-1
+          kmin=-parm%nr2+1
+          kmax=parm%nr2-1
           IF (i.EQ.0.AND.j.EQ.0) THEN
              kmin=0
           ENDIF
           DO k=kmin,kmax
              g2=0._real_8
              DO ir=1,3
-                t=REAL(i,kind=real_8)*gvec_com%b1(ir)+REAL(j,kind=real_8)*gvec_com%b2(ir)+REAL(k,kind=real_8)*gvec_com%b3(ir)
+                t=REAL(i,kind=real_8)*gvec_com%b3(ir)+REAL(j,kind=real_8)*gvec_com%b1(ir)+REAL(k,kind=real_8)*gvec_com%b2(ir)
                 g2=g2+t*t
              ENDDO
              IF (compare_lt(g2,gvec_com%gcut)) THEN
@@ -286,7 +263,7 @@ CONTAINS
                 in3=nh3+k
                 IF (compare_lt(g2,gcutwmax)) THEN
 !                IF (g2.LT.gcutwmax) THEN
-                   icpu=ixray(in2,in3)
+                   icpu=ixray(in1,in2)
                    IF (-icpu.EQ.parai%mepos+1) THEN
                       ncpw%ngw=ncpw%ngw+1
                    ENDIF
@@ -294,25 +271,29 @@ CONTAINS
                 ELSE
                    sign=1._real_8
                 ENDIF
-                icpu=ihray(in2,in3)
+                icpu=ihray(in1,in2)
                 IF (-icpu.EQ.parai%mepos+1) THEN
                    ncpw%nhg=ncpw%nhg+1
                    ! HG(NHG)=G2+SQRT(real(IG-1,kind=real_8))*EPSG*SIGN
                    ! G2*EPSGX*SIGN is the epsilon added (>= epsilon(G2))
                    ! SQRT(FLOAT(IG-1)) is to break the symmetry
-                   hg(ncpw%nhg)=g2*(1._real_8+SQRT(REAL(ig-1,kind=real_8))*epsgx*sign)
-                   inyh(1,ncpw%nhg)=in1
-                   inyh(2,ncpw%nhg)=in2
-                   inyh(3,ncpw%nhg)=in3
+                   hg(ncpw%nhg)=g2
+                   pre_inyh(1,ncpw%nhg)=in1
+                   pre_inyh(2,ncpw%nhg)=in2
+                   pre_inyh(3,ncpw%nhg)=in3
                 ENDIF
              ENDIF
           ENDDO
        ENDDO
     ENDDO
+
+    tfft%nhg = ncpw%nhg
+    tfft%ngw = ncpw%ngw
+
     CALL zeroing(mgpa)!,kr2s*kr3s)
     parai%nhrays=0
     parai%ngrays=0
-    DO j1=1,fpar%kr3s
+    DO j1=1,fpar%kr1s
        DO j2=1,fpar%kr2s
           IF (ihray(j2,j1).EQ.-(parai%mepos+1)) parai%nhrays=parai%nhrays+1
           IF (ixray(j2,j1).EQ.-(parai%mepos+1)) THEN
@@ -322,7 +303,7 @@ CONTAINS
        ENDDO
     ENDDO
     img=parai%ngrays
-    DO j1=1,fpar%kr3s
+    DO j1=1,fpar%kr1s
        DO j2=1,fpar%kr2s
           IF (ihray(j2,j1).EQ.-(parai%mepos+1).AND.mgpa(j2,j1).EQ.0) THEN
              img=img+1
@@ -357,38 +338,23 @@ CONTAINS
     parap%sparm(9,parai%mepos)=parai%ngrays
     CALL my_allgather_i(parap%sparm,SIZE(parap%sparm,1),parai%allgrp)
 
-    IF (paral%io_parent) THEN
-       WRITE(6,'(A,A)') '  NCPU     NGW',&
-            '     NHG  PLANES  GXRAYS  HXRAYS ORBITALS Z-PLANES'
-       DO i=0,parai%nproc-1
-          iorb=parap%nst12(i,2)-parap%nst12(i,1)+1
-          izpl=parap%nrzpl(i,2)-parap%nrzpl(i,1)+1
-          WRITE(6,'(I6,7I8)') i,parap%sparm(3,i),parap%sparm(1,i),parap%sparm(5,i),&
-               parap%sparm(9,i),parap%sparm(8,i),iorb,izpL
-          ! IF(SPARM(3,I).LE.0) CALL stopgm(procedureN,
-          ! *            'NGW .LE. 0')
-       ENDDO
-    ENDIF
-    ! ==--------------------------------------------------------------==
-    ! DEALLOCATE DATA ARRAYS
-    ! ==--------------------------------------------------------------==
-    DEALLOCATE(mgpa,STAT=ierr)
-    IF(ierr/=0) CALL stopgm(procedureN,'deallocation problem',&
-         __LINE__,__FILE__)
-    DEALLOCATE(ixray,STAT=ierr)
-    IF(ierr/=0) CALL stopgm(procedureN,'deallocation problem',&
-         __LINE__,__FILE__)
-    DEALLOCATE(ihray,STAT=ierr)
-    IF(ierr/=0) CALL stopgm(procedureN,'deallocation problem',&
-         __LINE__,__FILE__)
     ! ==--------------------------------------------------------------==
     ! SORTING OF G-VECTORS
     ! ==--------------------------------------------------------------==
-    CALL gsort(hg,inyh,ncpw%nhg)
+
+    ALLOCATE(ind(ncpw%nhg),STAT=ierr)
+    IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
+         __LINE__,__FILE__)
+    ind = 0
+    CALL hpsort_eps( ncpw%nhg, hg, ind, eps8 )
+
+    DO i = 1, ncpw%nhg
+       inyh(:,i) = pre_inyh(:,ind(i))
+    ENDDO
+
     DO ig=1,ncpw%nhg
        mapgp(ig)=ig
     ENDDO
-    CALL gorder
     ! ==--------------------------------------------------------------==
     geq0=.FALSE.
     i0=0
@@ -405,15 +371,141 @@ CONTAINS
        CALL prmem(procedureN)
     ENDIF
     ! ==--------------------------------------------------------------==
+    ! SETUP ARRAYS NEEDED FOR NEW GDISTRIBUTION FFT
+    ! ==--------------------------------------------------------------==
+
+    ALLOCATE( parai%cp_overview( 4, parai%nproc ) )
+    parai%cp_overview = 0
+    parai%cp_overview( 1, parai%me+1 ) = parai%cp_me
+    parai%cp_overview( 2, parai%me+1 ) = parai%node_me
+    parai%cp_overview( 3, parai%me+1 ) = parai%node_nproc
+    Call mp_sum(parai%cp_overview,parai%nproc*4,parai%allgrp)
+    offset = 0
+    DO i = 1, parai%nproc
+       parai%cp_overview( 4, i ) = offset
+       IF( parai%cp_overview( 2, i ) + 1 .eq. parai%cp_overview( 3, i ) ) offset = offset + 1
+    ENDDO
+
+    parai%nnode = MAXVAL(parai%cp_overview(4,:))+1
+    parai%my_node = parai%cp_overview( 4, parai%me+1 )
+    parai%max_node_nproc = MAXVAL(parai%cp_overview(3,:))
+
+    ALLOCATE( parai%node_nproc_overview( parai%nnode ) )
+    DO i = 1, parai%nnode
+       DO j = 1, parai%nproc
+          IF( parai%cp_overview(4,j) .eq. i-1 ) parai%node_nproc_overview( i ) = parai%cp_overview(3,j)
+       ENDDO
+    ENDDO
+
+    ALLOCATE( parai%node_grpindx( parai%node_nproc ) )
+    DO i = 1, parai%nproc
+       IF( parai%my_node .eq. parai%cp_overview(4,i) ) parai%node_grpindx( parai%cp_overview(2,i)+1 ) = i - 1
+    ENDDO
+
+    ALLOCATE( tfft%cp_ngws( parai%cp_nogrp ) )
+    ALLOCATE( tfft%cp_nstates( parai%cp_nogrp ) )
+
+    !For now here; need to have a better spot for this eventually!
+    parai%ncpus_FFT = parai%ncpus
+
+    ALLOCATE( tfft%thread_z_sticks( parai%ncpus_FFT, 3, parai%nproc, 2 ), STAT=ierr )
+    IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
+         __LINE__,__FILE__)
+    ALLOCATE( tfft%thread_z_start( parai%ncpus_FFT, 3, parai%nproc, 2 ), STAT=ierr )
+    IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
+         __LINE__,__FILE__)
+    ALLOCATE( tfft%thread_z_end( parai%ncpus_FFT, 3, parai%nproc, 2 ), STAT=ierr )
+    IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
+         __LINE__,__FILE__)
+    ALLOCATE( tfft%thread_prepare_sticks( parai%ncpus_FFT, 2 ), STAT=ierr )
+    IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
+         __LINE__,__FILE__)
+    ALLOCATE( tfft%thread_prepare_start( parai%ncpus_FFT, 2 ), STAT=ierr )
+    IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
+         __LINE__,__FILE__)
+    ALLOCATE( tfft%thread_prepare_end( parai%ncpus_FFT, 2 ), STAT=ierr )
+    IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
+         __LINE__,__FILE__)
+    ALLOCATE( tfft%thread_y_sticks( parai%ncpus_FFT, 3 ), STAT=ierr )
+    IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
+         __LINE__,__FILE__)
+    ALLOCATE( tfft%thread_y_start( parai%ncpus_FFT, 3 ), STAT=ierr )
+    IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
+         __LINE__,__FILE__)
+    ALLOCATE( tfft%thread_y_end( parai%ncpus_FFT, 3 ), STAT=ierr )
+    IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
+         __LINE__,__FILE__)
+    ALLOCATE( tfft%thread_x_sticks( parai%ncpus_FFT, 3 ), STAT=ierr )
+    IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
+         __LINE__,__FILE__)
+    ALLOCATE( tfft%thread_x_start( parai%ncpus_FFT, 3 ), STAT=ierr )
+    IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
+         __LINE__,__FILE__)
+    ALLOCATE( tfft%thread_x_end( parai%ncpus_FFT, 3 ), STAT=ierr )
+    IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
+         __LINE__,__FILE__)
+    ALLOCATE( tfft%thread_ngms( parai%ncpus_FFT ), STAT=ierr )
+    IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
+         __LINE__,__FILE__)
+    ALLOCATE( tfft%thread_ngms_start( parai%ncpus_FFT ), STAT=ierr )
+    IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
+         __LINE__,__FILE__)
+    ALLOCATE( tfft%thread_ngms_end( parai%ncpus_FFT ), STAT=ierr )
+    IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
+         __LINE__,__FILE__)
+    ALLOCATE( tfft%thread_rspace( parai%ncpus_FFT ), STAT=ierr )
+    IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
+         __LINE__,__FILE__)
+    ALLOCATE( tfft%thread_rspace_start( parai%ncpus_FFT ), STAT=ierr )
+    IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
+         __LINE__,__FILE__)
+    ALLOCATE( tfft%thread_rspace_end( parai%ncpus_FFT ), STAT=ierr )
+    IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
+         __LINE__,__FILE__)
+
+    CALL SetupArrays( ihray, ixray )
+
+    ! ==--------------------------------------------------------------==
     ! LEADING DIMENSIONS OF REAL SPACE ARRAYS
     ! ==--------------------------------------------------------------==
     CALL leadim(parm%nr1,parm%nr2,parm%nr3,fpar%kr1,fpar%kr2,fpar%kr3)
+    fpar%kr1 = tfft%nr3p( parai%me+1 )
     fpar%nnr1=fpar%kr1*fpar%kr2s*fpar%kr3s
+    fpar%nng1=tfft%nsp( parai%me+1 ) * fpar%kr3s
     DEALLOCATE(thread_buff,STAT=ierr)
     IF(ierr/=0) CALL stopgm(procedureN,'deallocation problem', &
          __LINE__,__FILE__)
+
+    IF (paral%io_parent) THEN
+       WRITE(6,'(A,A)') '  NCPU     NGW',&
+            '     NHG  PLANES  GXRAYS  HXRAYS ORBITALS Z-PLANES'
+       DO i=0,parai%nproc-1
+          iorb=parap%nst12(i,2)-parap%nst12(i,1)+1
+          izpl=parap%nrzpl(i,2)-parap%nrzpl(i,1)+1
+          WRITE(6,'(I6,8I8)') i,parap%sparm(3,i),parap%sparm(1,i),parap%sparm(5,i),&
+               parap%sparm(9,i),parap%sparm(8,i),iorb,izpL,tfft%nr3p(i+1)
+          ! IF(SPARM(3,I).LE.0) CALL stopgm(procedureN,
+          ! *            'NGW .LE. 0')
+       ENDDO
+    ENDIF
+
+    ! ==--------------------------------------------------------------==
+    ! DEALLOCATE DATA ARRAYS
+    ! ==--------------------------------------------------------------==
+    DEALLOCATE(mgpa,STAT=ierr)
+    IF(ierr/=0) CALL stopgm(procedureN,'deallocation problem',&
+         __LINE__,__FILE__)
+    DEALLOCATE(ixray,STAT=ierr)
+    IF(ierr/=0) CALL stopgm(procedureN,'deallocation problem',&
+         __LINE__,__FILE__)
+    DEALLOCATE(ihray,STAT=ierr)
+    IF(ierr/=0) CALL stopgm(procedureN,'deallocation problem',&
+         __LINE__,__FILE__)
+
+    ! ==--------------------------------------------------------------==
     CALL tihalt(procedureN,isub)
     ! ==--------------------------------------------------------------==
+
     RETURN
   END SUBROUTINE loadpa
   ! ==================================================================
@@ -509,9 +601,9 @@ CONTAINS
     RETURN
   END SUBROUTINE leadim
   ! ==================================================================
-  SUBROUTINE xfft(iray,gvcut)
+  SUBROUTINE zfft(iray,gvcut)
     ! ==--------------------------------------------------------------==
-    INTEGER                                  :: iray(fpar%kr2,fpar%kr3)
+    INTEGER                                  :: iray(fpar%kr1,fpar%kr2)
     REAL(real_8)                             :: gvcut
 
     INTEGER                                  :: i, id1, id2, id3, in1, in2, &
@@ -526,15 +618,15 @@ CONTAINS
     nh1=parm%nr1/2+1
     nh2=parm%nr2/2+1
     nh3=parm%nr3/2+1
-    DO i=0,parm%nr1-1
-       jmin=-parm%nr2+1
-       jmax=parm%nr2-1
+    DO i=0,parm%nr3-1
+       jmin=-parm%nr1+1
+       jmax=parm%nr1-1
        IF (i.EQ.0) THEN
           jmin=0
        ENDIF
        DO j=jmin,jmax
-          kmin=-parm%nr3+1
-          kmax=parm%nr3-1
+          kmin=-parm%nr2+1
+          kmax=parm%nr2-1
           IF (i.EQ.0.AND.j.EQ.0) THEN
              kmin=0
           ENDIF
@@ -552,21 +644,21 @@ CONTAINS
                 id1=2*nh1-in1
                 id2=2*nh2-in2
                 id3=2*nh3-in3
-                ix1=iray(in2,in3)
-                ix2=iray(id2,id3)
+                ix1=iray(in1,in2)
+                ix2=iray(id1,id2)
                 IF (ix1.GT.0) THEN
-                   iray(in2,in3)=ix1+1
+                   iray(in1,in2)=ix1+1
                    IF (ix2.GT.0) THEN
-                      IF ((in2.NE.id2).OR.(in3.NE.id3)) THEN
+                      IF ((in1.NE.id1).OR.(in2.NE.id2)) THEN
                          IF (paral%io_parent) WRITE(6,*) ' INCONSISTENT MESH?'
                          CALL stopgm('XFFT',' ',& 
                               __LINE__,__FILE__)
                       ENDIF
                    ENDIF
                 ELSEIF (ix2.GT.0) THEN
-                   iray(id2,id3)=ix2+1
+                   iray(id1,id2)=ix2+1
                 ELSE
-                   iray(in2,in3)=1
+                   iray(in1,in2)=1
                 ENDIF
              ENDIF
           ENDDO
@@ -574,9 +666,9 @@ CONTAINS
     ENDDO
     ! ==--------------------------------------------------------------==
     RETURN
-  END SUBROUTINE xfft
+  END SUBROUTINE zfft
   ! ==================================================================
-  SUBROUTINE cxfft(iray,gvcut)
+  SUBROUTINE czfft(iray,gvcut)
     ! ==--------------------------------------------------------------==
     INTEGER                                  :: iray(fpar%kr2,*)
     REAL(real_8)                             :: gvcut
@@ -592,22 +684,22 @@ CONTAINS
     nh1=parm%nr1/2+1
     nh2=parm%nr2/2+1
     nh3=parm%nr3/2+1
-    DO i=0,parm%nr1-1
-       jmin=-parm%nr2+1
-       jmax=parm%nr2-1
+    DO i=0,parm%nr3-1
+       jmin=-parm%nr1+1
+       jmax=parm%nr1-1
        IF (i.EQ.0) THEN
           jmin=0
        ENDIF
        DO j=jmin,jmax
-          kmin=-parm%nr3+1
-          kmax=parm%nr3-1
+          kmin=-parm%nr2+1
+          kmax=parm%nr2-1
           IF (i.EQ.0.AND.j.EQ.0) THEN
              kmin=0
           ENDIF
           DO k=kmin,kmax
              g2=0._real_8
              DO ir=1,3
-                t=REAL(i,kind=real_8)*gvec_com%b1(ir)+REAL(j,kind=real_8)*gvec_com%b2(ir)+REAL(k,kind=real_8)*gvec_com%b3(ir)
+                t=REAL(i,kind=real_8)*gvec_com%b3(ir)+REAL(j,kind=real_8)*gvec_com%b1(ir)+REAL(k,kind=real_8)*gvec_com%b2(ir)
                 g2=g2+t*t
              ENDDO
              IF (compare_lt(g2,gvcut)) THEN
@@ -618,16 +710,16 @@ CONTAINS
                 id1=2*nh1-in1
                 id2=2*nh2-in2
                 id3=2*nh3-in3
-                icpu1=iray(in2,in3)
-                icpu2=iray(id2,id3)
+                icpu1=iray(in1,in2)
+                icpu2=iray(id1,id2)
                 IF (icpu2.EQ.0) THEN
-                   iray(id2,id3)=icpu1
+                   iray(id1,id2)=icpu1
                 ELSEIF (icpu1.EQ.0) THEN
-                   iray(in2,in3)=icpu2
+                   iray(in1,in2)=icpu2
                 ELSEIF (icpu1.NE.icpu2) THEN
                    IF (paral%io_parent)&
                         WRITE(6,*) ' INCONSISTENT XRAY FIELDS',icpu1,icpu2
-                   CALL stopgm('CXFFT',' ',& 
+                   CALL stopgm('CZFFT',' ',&
                         __LINE__,__FILE__)
                 ENDIF
              ENDIF
@@ -636,7 +728,7 @@ CONTAINS
     ENDDO
     ! ==--------------------------------------------------------------==
     RETURN
-  END SUBROUTINE cxfft
+  END SUBROUTINE czfft
   ! ==================================================================
   SUBROUTINE gorder
     ! ==--------------------------------------------------------------==
@@ -809,5 +901,421 @@ CONTAINS
     
   END FUNCTION compare_lt
   ! ******************************************************************************
+  SUBROUTINE Distribute_Sticks( n1, n2, iray, iray2 )
+    IMPLICIT NONE
+
+    INTEGER, INTENT(IN)                         :: n1, n2
+    INTEGER, INTENT(INOUT)                      :: iray( n1, n2 )
+    INTEGER, OPTIONAL, INTENT(INOUT)            :: iray2( n1, n2 )
+
+!    REAL(real_8), PARAMETER                     :: thresh
+    INTEGER                                     :: m1, m2, ifa, jfa, i, j, highest, proc, c_proc, indx1, indx2, k
+    LOGICAL                                     :: finished
+    INTEGER                                     :: nst( parai%nproc ), ngv( parai%nproc )
+
+    finished = .false.
+
+    m1 = ( n1 / 2 ) + 1
+    m2 = ( n2 / 2 ) + 1
+
+    nst = 0
+    ngv = 0
+
+    IF( present( iray2 ) ) THEN
+
+       DO i = 1, n1
+          DO j = 1, n2
+             IF( iray2( i, j ) .ne. 0 ) THEN
+                nst( -iray2( i, j ) ) = nst( -iray2( i, j ) ) + 1
+                ngv( -iray2( i, j ) ) = ngv( -iray2( i, j ) ) + iray( i, j )
+                iray( i, j ) = iray2( i, j )
+             END IF
+          ENDDO
+       ENDDO
+
+       tfft%npst = tfft%nwst
+       k = tfft%nwst
+       DO ifa = 1, n2
+          i = MOD( m2 + ifa - 1 - 1, n2 ) + 1
+          DO jfa = 1, n1
+             j = MOD( m1 + jfa - 1 - 1, n1 ) + 1
+             IF( iray( j, i ) .gt. 0 ) THEN
+                tfft%npst = tfft%npst + 1
+                tfft%indx_map( j, i ) = tfft%npst
+             END IF
+          ENDDO
+       ENDDO
+
+    ELSE
+
+       tfft%nwst = 0
+       k = 0
+       DO ifa = 1, n2
+          i = MOD( m2 + ifa - 1 - 1, n2 ) + 1
+          DO jfa = 1, n1
+             j = MOD( m1 + jfa - 1 - 1, n1 ) + 1
+             IF( iray( j, i ) .gt. 0 ) THEN
+                tfft%nwst = tfft%nwst + 1
+                tfft%indx_map( j, i ) = tfft%nwst
+             END IF
+          ENDDO
+       ENDDO
+
+    END IF
+
+
+    DO while( .not. finished )
+
+       highest = 0
+       indx1 = 0
+       indx2 = 0
+       k = k + 1
+       DO ifa = 1, n2
+          i = MOD( m2 + ifa - 1 - 1, n2 ) + 1
+          DO jfa = 1, n1
+             j = MOD( m1 + jfa - 1 - 1, n1 ) + 1
+             IF( iray( j, i ) .gt. highest ) THEN
+                highest = iray( j, i )
+                indx1 = j
+                indx2 = i
+             END IF
+          ENDDO
+       ENDDO
+
+       IF( highest .ne. 0 ) THEN
+          c_proc = 1
+          DO proc = 1, parai%nproc
+             IF( ngv(proc) .lt. ngv(c_proc) ) THEN
+                c_proc = proc
+             ELSEIF( ngv(proc) .eq. ngv(c_proc) .and. nst(proc) .lt. nst(c_proc) ) THEN
+                c_proc = proc
+             END IF
+          ENDDO
+          iray( indx1, indx2 ) = - c_proc
+          ngv(c_proc) = ngv(c_proc) + highest
+          nst(c_proc) = nst(c_proc) + 1
+          tfft%indx( k ) = tfft%indx_map( indx1, indx2 )
+          tfft%ind1( tfft%indx( k ) ) = indx1
+          tfft%ind2( tfft%indx( k ) ) = indx2
+       ELSE
+          finished = .true.
+       END IF
+
+    END DO
+
+
+  END SUBROUTINE
+  ! ******************************************************************************
+  SUBROUTINE hpsort_eps (n, ra, ind, eps)
+    !---------------------------------------------------------------------
+    !! Sort an array ra(1:n) into ascending order using heapsort algorithm,
+    !! and considering two elements being equal if their values differ
+    !! for less than "eps".
+    !! \(\text{n}\) is input, \(\text{ra}\) is replaced on output by its
+    !! sorted rearrangement.
+    !! Create an index table (ind) by making an exchange in the index array
+    !! whenever an exchange is made on the sorted data array (\(\text{ra}\)).
+    !! In case of equal values in the data array (\(\text{ra}\)) the values
+    !! in the index array (ind) are used to order the entries.
+    !! If on input ind(1) = 0 then indices are initialized in the routine,
+    !! if on input ind(1) != 0 then indices are assumed to have been
+    !! initialized before entering the routine and these indices are carried
+    !! around during the sorting process.
+    !
+    ! no work space needed !
+    ! free us from machine-dependent sorting-routines !
+    !
+    ! adapted from Numerical Recipes pg. 329 (new edition)
+    !
+    implicit none
+    !-input/output variables
+    integer, intent(in) :: n
+    integer, intent(inout) :: ind (*)
+    real(real_8), intent(inout) :: ra (*)
+    real(real_8), intent(in) :: eps
+    !-local variables
+    integer :: i, ir, j, l, iind
+    real(real_8) :: rra
+    ! initialize index array
+    if (ind (1) .eq.0) then
+       do i = 1, n
+          ind (i) = i
+       enddo
+    endif
+    ! nothing to order
+    if (n.lt.2) return
+    ! initialize indices for hiring and retirement-promotion phase
+    l = n / 2 + 1
+
+    ir = n
+
+    sorting: do
+
+      ! still in hiring phase
+      if ( l .gt. 1 ) then
+         l    = l - 1
+         rra  = ra (l)
+         iind = ind (l)
+         ! in retirement-promotion phase.
+      else
+         ! clear a space at the end of the array
+         rra  = ra (ir)
+         !
+         iind = ind (ir)
+         ! retire the top of the heap into it
+         ra (ir) = ra (1)
+         !
+         ind (ir) = ind (1)
+         ! decrease the size of the corporation
+         ir = ir - 1
+         ! done with the last promotion
+         if ( ir .eq. 1 ) then
+            ! the least competent worker at all !
+            ra (1)  = rra
+            !
+            ind (1) = iind
+            exit sorting
+         endif
+      endif
+      ! wheter in hiring or promotion phase, we
+      i = l
+      ! set up to place rra in its proper level
+      j = l + l
+      !
+      do while ( j .le. ir )
+         if ( j .lt. ir ) then
+            ! compare to better underling
+            if ( abs(ra(j)-ra(j+1)).ge.eps ) then
+               if (ra(j).lt.ra(j+1)) j = j + 1
+            else
+               ! this means ra(j) == ra(j+1) within tolerance
+               if (ind (j) .lt.ind (j + 1) ) j = j + 1
+            endif
+         endif
+         ! demote rra
+         if ( abs(rra - ra(j)).ge.eps ) then
+            if (rra.lt.ra(j)) then
+               ra (i) = ra (j)
+               ind (i) = ind (j)
+               i = j
+               j = j + j
+            else
+               ! set j to terminate do-while loop
+               j = ir + 1
+            end if
+         else
+            !this means rra == ra(j) within tolerance
+            ! demote rra
+            if (iind.lt.ind (j) ) then
+               ra (i) = ra (j)
+               ind (i) = ind (j)
+               i = j
+               j = j + j
+            else
+               ! set j to terminate do-while loop
+               j = ir + 1
+            endif
+         end if
+      enddo
+      ra (i) = rra
+      ind (i) = iind
+
+    end do sorting
+    !
+  END SUBROUTINE hpsort_eps
+  ! ******************************************************************************
+  SUBROUTINE SetupArrays( ihray, ixray )
+    IMPLICIT NONE
+
+    INTEGER, ALLOCATABLE, INTENT(IN) :: ihray(:,:), ixray(:,:)
+    CHARACTER(*), PARAMETER                     :: procedureN = 'SetupArrays'
+
+    INTEGER                                     :: ierr, i, istick, i1, i2, ix, iy, ixM, i1M, i2M, k, f, j, ifa, jfa
+
+    tfft%which = 1
+
+    ALLOCATE(tfft%nr3p(parai%nproc),STAT=ierr)
+    IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
+         __LINE__,__FILE__)
+    ALLOCATE(tfft%nr3p_offset(parai%nproc),STAT=ierr)
+
+    IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
+         __LINE__,__FILE__)
+
+    tfft%nr3p = 0
+    tfft%nr3p_offset = 0
+    j = 0
+    DO i = 1, fpar%kr3s
+       j = mod( j, parai%nproc ) + 1
+       tfft%nr3p( j ) = tfft%nr3p( j ) + 1
+    ENDDO
+    DO i = 1, parai%nproc
+       IF( i .eq. 1 ) THEN
+          tfft%nr3p_offset(i) = 0
+       ELSE
+          tfft%nr3p_offset(i) = tfft%nr3p_offset(i-1) + tfft%nr3p(i-1)
+       END IF
+    ENDDO
+    tfft%my_nr3p = tfft%nr3p( parai%me+1 )
+    tfft%nr3px   = MAXVAL ( tfft%nr3p )
+
+    ALLOCATE(tfft%ir1w(fpar%kr1s),STAT=ierr)
+    IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
+         __LINE__,__FILE__)
+    ALLOCATE(tfft%ir1p(fpar%kr1s),STAT=ierr)
+    IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
+         __LINE__,__FILE__)
+    ALLOCATE(tfft%indw(fpar%kr1s),STAT=ierr)
+    IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
+         __LINE__,__FILE__)
+    ALLOCATE(tfft%indp(fpar%kr1s),STAT=ierr)
+    IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
+         __LINE__,__FILE__)
+    ALLOCATE(tfft%nsw(parai%nproc),STAT=ierr)
+    IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
+         __LINE__,__FILE__)
+    ALLOCATE(tfft%nsp(parai%nproc),STAT=ierr)
+    IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
+         __LINE__,__FILE__)
+
+    tfft%nsw = 0
+    tfft%nsp = 0
+    tfft%ir1w = 0
+    tfft%ir1p = 0
+    tfft%nr1w = 0
+    tfft%nr1p = 0
+    DO i = 1, tfft%npst
+       istick = tfft%indx( i )
+       i1 = tfft%ind1( istick )
+       i2 = tfft%ind2( istick )
+
+       ix = i1 - ( fpar%kr1s / 2 )
+
+       IF( ihray( i1, i2 ) .ne. 0 ) THEN
+
+          IF( ixray( i1, i2 ) .ne. 0 ) THEN
+
+             IF( tfft%ir1w( ix ) .eq. 0 ) THEN
+                tfft%ir1w(ix) = -1
+                tfft%ir1p(ix) = -1
+             END IF
+             tfft%nsw( - ixray( i1, i2 ) ) = tfft%nsw( - ixray( i1, i2 ) ) + 1
+             tfft%nsp( - ixray( i1, i2 ) ) = tfft%nsp( - ixray( i1, i2 ) ) + 1
+
+          ELSE
+
+             IF( tfft%ir1p( ix ) .eq. 0 ) THEN
+                tfft%ir1p(ix) = -1
+             END IF
+             tfft%nsp( - ihray( i1, i2 ) ) = tfft%nsp( - ihray( i1, i2 ) ) + 1
+
+          END IF
+
+
+          i1M = 2 * ( fpar%kr1s / 2 ) + 2 - i1
+          i2M = 2 * ( fpar%kr2s / 2 ) + 2 - i2
+          IF( i1M .eq. i1 .and. i2M .eq. i2 ) CYCLE
+          ixM = i1M - ( fpar%kr1s / 2 ) + fpar%kr1s
+          IF( ixM .gt. fpar%kr1s ) ixM = ixM - fpar%kr1s
+          IF( ixray( i1M , i2M ) .ne. 0 ) THEN
+
+             IF( tfft%ir1w( ixM ) .eq. 0 ) THEN
+                tfft%ir1w(ixM) = -1
+                tfft%ir1p(ixM) = -1
+             END IF
+             tfft%nsw( - ixray( i1M, i2M ) ) = tfft%nsw( - ixray( i1M, i2M ) ) + 1
+             tfft%nsp( - ixray( i1M, i2M ) ) = tfft%nsp( - ixray( i1M, i2M ) ) + 1
+
+          ELSE
+
+             IF( tfft%ir1p( ixM ) .eq. 0 ) THEN
+                tfft%ir1p(ixM) = -1
+             END IF
+             tfft%nsp( - ihray( i1M, i2M ) ) = tfft%nsp( - ihray( i1M, i2M ) ) + 1
+
+          END IF
+
+
+       END IF
+
+    ENDDO
+
+    DO i = 1, fpar%kr1s
+
+       IF( tfft%ir1w( i ) .lt. 0 ) THEN
+          tfft%nr1w = tfft%nr1w + 1
+          tfft%ir1w( i ) = tfft%nr1w
+          tfft%ir1p( i ) = tfft%nr1w
+          tfft%indw( tfft%nr1w ) = i
+          tfft%indp( tfft%nr1w ) = i
+       END IF
+
+    ENDDO
+    tfft%nr1p = tfft%nr1w
+    DO i = 1, fpar%kr1s
+
+       IF( tfft%ir1p( i ) .lt. 0 ) THEN
+          tfft%nr1p = tfft%nr1p + 1
+          tfft%ir1p( i ) = tfft%nr1p
+          tfft%indp( tfft%nr1p ) = i
+       END IF
+
+    ENDDO
+
+
+    ALLOCATE(tfft%iss(parai%nproc),STAT=ierr)
+    IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
+         __LINE__,__FILE__)
+
+    DO i = 1, parai%nproc
+      IF( i .eq. 1 ) THEN
+        tfft%iss( i ) = 0
+      ELSE
+        tfft%iss( i ) = tfft%iss( i - 1 ) + tfft%nsp( i - 1 )
+      ENDIF
+    ENDDO
+
+
+    ALLOCATE(tfft%ismap(fpar%kr1s*fpar%kr2s),STAT=ierr)
+    IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
+         __LINE__,__FILE__)
+
+    tfft%ismap = 0
+    tfft%nsp = 0
+    k = 0
+    f = 0
+    DO ifa = 1, fpar%kr2s
+       i = MOD( ( fpar%kr2s / 2 ) + 1 + ifa - 1 - 1, fpar%kr2s ) + 1
+       DO jfa = 1, fpar%kr1s
+          j = MOD( ( fpar%kr1s / 2 ) + 1 + jfa - 1 - 1, fpar%kr1s ) + 1
+          f = f + 1
+          IF( ixray( j, i ) .lt. 0 ) THEN
+             tfft%nsp( - ixray( j, i ) ) = tfft%nsp( - ixray( j, i ) ) + 1
+             tfft%ismap( tfft%nsp( - ixray( j, i ) ) + tfft%iss( - ixray( j, i ) ) ) = f
+          END IF
+       ENDDO
+    ENDDO
+
+    k = 0
+    f = 0
+    DO ifa = 1, fpar%kr2s
+       i = MOD( ( fpar%kr2s / 2 ) + 1 + ifa - 1 - 1, fpar%kr2s ) + 1
+       DO jfa = 1, fpar%kr1s
+          j = MOD( ( fpar%kr1s / 2 ) + 1 + jfa - 1 - 1, fpar%kr1s ) + 1
+          f = f + 1
+          IF( ixray( j, i ) .eq. 0 .and. ihray( j, i ) .lt. 0 ) THEN
+             tfft%nsp( - ihray( j, i ) ) = tfft%nsp( - ihray( j, i ) ) + 1
+             tfft%ismap( tfft%nsp( - ihray( j, i ) ) + tfft%iss( - ihray( j, i ) ) ) = f
+          END IF
+       ENDDO
+    ENDDO
+
+    tfft%small_chunks(1) = tfft%nr3px * MAXVAL( tfft%nsw )
+    tfft%small_chunks(2) = tfft%nr3px * MAXVAL( tfft%nsp )
+    tfft%big_chunks(1)   = tfft%small_chunks(1) * parai%max_node_nproc * parai%max_node_nproc
+    tfft%big_chunks(2)   = tfft%small_chunks(2) * parai%max_node_nproc * parai%max_node_nproc
+    tfft%tscale = 1.0d0 / dble( fpar%kr1s * fpar%kr2s * fpar%kr3s )
+
+  END SUBROUTINE SetupArrays
 
 END MODULE loadpa_utils

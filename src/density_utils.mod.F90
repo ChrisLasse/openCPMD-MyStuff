@@ -1,5 +1,7 @@
 MODULE density_utils
   USE kinds,                           ONLY: real_8
+  USE fft,                             ONLY: FFT_TYPE_DESCRIPTOR
+  USE system,                          ONLY: fpar
 
   IMPLICIT NONE
 
@@ -9,6 +11,7 @@ MODULE density_utils
   PUBLIC :: build_density_imag
   PUBLIC :: build_density_sum
   PUBLIC :: build_density_sum_batch
+  PUBLIC :: build_density_sum_manualOMP
 
 CONTAINS
 
@@ -64,6 +67,36 @@ CONTAINS
     ! ==--------------------------------------------------------------==
     RETURN
   END SUBROUTINE build_density_sum
+  ! ==================================================================
+  SUBROUTINE build_density_sum_manualOMP( tfft, alpha_real, alpha_imag, psi, rho, mythread, spins, nspin)
+    ! ==--------------------------------------------------------------==
+    TYPE(FFT_TYPE_DESCRIPTOR), INTENT(IN)    :: tfft
+    COMPLEX(real_8), INTENT(IN)              :: psi( tfft%my_nr3p * fpar%kr2s * fpar%kr1s, * )
+    REAL(real_8), INTENT(INOUT)              :: rho( tfft%my_nr3p * fpar%kr2s * fpar%kr1s, * )
+    INTEGER, INTENT(IN)                      :: mythread, nspin
+    REAL(real_8), INTENT(IN)                 :: alpha_real, alpha_imag
+    INTEGER, INTENT(IN)                      :: spins( 2 )
+
+    INTEGER                                  :: i, j
+
+    IF( nspin .eq. 1 ) THEN
+
+          DO j = tfft%thread_rspace_start( mythread+1 ), tfft%thread_rspace_end( mythread+1 )
+             rho( j, 1 ) = rho( j, 1 ) + alpha_real *  REAL( psi( j, 1 ) )**2 &
+                                       + alpha_imag * AIMAG( psi( j, 1 ) )**2
+          ENDDO
+
+    ELSE
+
+          DO j = tfft%thread_rspace_start( mythread+1 ), tfft%thread_rspace_end( mythread+1 )
+             rho( j, spins( 1 ) ) = rho( j, spins( 1 ) ) + alpha_real *  REAL( psi( j, 1 ) )**2
+             rho( j, spins( 2 ) ) = rho( j, spins( 2 ) ) + alpha_imag * AIMAG( psi( j, 1 ) )**2
+          ENDDO
+
+    END IF
+    ! ==--------------------------------------------------------------==
+    RETURN
+  END SUBROUTINE build_density_sum_manualOMP
   ! ==================================================================
   SUBROUTINE build_density_sum_batch(alpha_real,alpha_imag,psi,rho,n1,n2,n3,spins,nspin)
     ! ==--------------------------------------------------------------==

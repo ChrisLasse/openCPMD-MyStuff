@@ -45,10 +45,18 @@ MODULE parac
   ! == node_me : index
   ! == cp_inter_node_grp : sub group of cp_inter_grp
   ! == cp_inter_node_nproc : nbr of procs
-  ! == cp_inter_node_me :index
+  ! == cp_inter_node_me : index
+  ! ==================================================================
+  ! == NEEDED FOR NEW GDISTRIBUTION FFT
+  ! ==================================================================
+  ! == send_handle : send handle for shared memory communication
+  ! == recv_handle : recv handle for shared memory communication
+  ! == c2_send_handle : send handle for c2 communication
+  ! == c2_recv_handle : recv handle for c2 communication
   ! ==--------------------------------------------------------------==
   TYPE :: parai_t
      INTEGER :: ncpus = HUGE(0)
+     INTEGER :: ncpus_FFT = HUGE(0)
      INTEGER :: nproc = HUGE(0)
      INTEGER :: me = HUGE(0)
      INTEGER :: mepos = HUGE(0)
@@ -111,6 +119,15 @@ MODULE parac
 #endif
      INTEGER :: cp_inter_node_nproc = HUGE(0)
      INTEGER :: cp_inter_node_me = HUGE(0)
+#ifdef __PARALLEL
+     type(MPI_REQUEST), ALLOCATABLE :: sendrecv_handle(:,:,:,:)
+#endif
+     INTEGER :: nnode = HUGE(0)
+     INTEGER :: my_node = HUGE(0)
+     INTEGER, ALLOCATABLE :: cp_overview(:,:)
+     INTEGER :: max_node_nproc = HUGE(0)
+     INTEGER, ALLOCATABLE :: node_nproc_overview(:)
+     INTEGER, ALLOCATABLE :: node_grpindx(:)
   END TYPE parai_t
   TYPE(parai_t), SAVE :: parai
 

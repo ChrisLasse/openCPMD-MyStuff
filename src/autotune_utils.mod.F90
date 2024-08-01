@@ -3,8 +3,8 @@
 MODULE autotune_utils
   USE elct,                            ONLY: crge
   USE spin,                            ONLY: clsd
-  USE rhoofr_utils,                    ONLY: rhoofr_batchfft
-  USE vpsi_utils,                      ONLY: vpsi_batchfft
+  USE rhoofr_utils,                    ONLY: rhoofr_new_gdistribution_batchfft
+  USE vpsi_utils,                      ONLY: vpsi_new_gdistribution_batchfft
   USE rnlsm_utils,                     ONLY: rnlsm
   USE fft,                             ONLY: batch_fft,&
                                              fft_tune_max_it
@@ -19,7 +19,7 @@ MODULE autotune_utils
 
   PRIVATE
 
-  PUBLIC autotune
+  PUBLIC :: autotune
   
 CONTAINS
   ! ==================================================================
@@ -48,8 +48,8 @@ CONTAINS
           IF(it.LE.fft_tune_max_it.AND.batch_fft)THEN
              rsactive = cntl%krwfn
              CALL autotune_fftbatchsize()
-             CALL rhoofr_batchfft(c0,rhoe,psi(:,1),nstate)
-             CALL vpsi_batchfft(c0,c2,crge%f(:,1),rhoe,psi(:,1),nstate,1,clsd%nlsd,.TRUE.)
+             CALL rhoofr_new_gdistribution_batchfft(c0,rhoe,psi(:,1),nstate)
+             CALL vpsi_new_gdistribution_batchfft(c0,c2,crge%f(:,1),rhoe,psi(:,1),nstate,1,clsd%nlsd,.TRUE.)
              rsactive = .FALSE.
           END IF
        END DO

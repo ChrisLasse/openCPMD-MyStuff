@@ -84,5 +84,90 @@ MODULE fft
   LOGICAL, ALLOCATABLE, ASYNCHRONOUS       :: locks_inv(:,:), locks_fw(:,:)
   REAL(real_8), ALLOCATABLE                :: fft_time_total(:)
   INTEGER, ALLOCATABLE                     :: fft_batchsizes(:)
+
+  ! ==================================================================
+  ! NEW GDISTRIBUTION
+  ! ==================================================================
+  INTEGER :: fft_numbuff
+  TYPE FFT_TYPE_DESCRIPTOR
+
+     INTEGER, ALLOCATABLE :: indx_map(:,:)
+     INTEGER, ALLOCATABLE :: indx(:)
+     INTEGER, ALLOCATABLE :: ind1(:)
+     INTEGER, ALLOCATABLE :: ind2(:)
+     INTEGER, ALLOCATABLE :: nr3_ranges(:,:)
+     INTEGER, ALLOCATABLE :: nr3p(:)
+     INTEGER, ALLOCATABLE :: nr3p_offset(:)
+     INTEGER, ALLOCATABLE :: ir1w(:)
+     INTEGER, ALLOCATABLE :: ir1p(:)
+     INTEGER, ALLOCATABLE :: indw(:)
+     INTEGER, ALLOCATABLE :: indp(:)
+     INTEGER, ALLOCATABLE :: nsw(:)
+     INTEGER, ALLOCATABLE :: nsp(:)
+     INTEGER, ALLOCATABLE :: iss(:)
+     INTEGER, ALLOCATABLE :: ismap(:)
+     INTEGER, ALLOCATABLE :: cp_ngws(:)
+     INTEGER, ALLOCATABLE :: cp_nstates(:)
+
+     INTEGER, ALLOCATABLE :: thread_z_sticks(:,:,:,:)
+     INTEGER, ALLOCATABLE :: thread_prepare_sticks(:,:)
+     INTEGER, ALLOCATABLE :: thread_y_sticks(:,:)
+     INTEGER, ALLOCATABLE :: thread_x_sticks(:,:)
+     INTEGER, ALLOCATABLE :: thread_z_start(:,:,:,:)
+     INTEGER, ALLOCATABLE :: thread_prepare_start(:,:)
+     INTEGER, ALLOCATABLE :: thread_y_start(:,:)
+     INTEGER, ALLOCATABLE :: thread_x_start(:,:)
+     INTEGER, ALLOCATABLE :: thread_z_end(:,:,:,:)
+     INTEGER, ALLOCATABLE :: thread_prepare_end(:,:)
+     INTEGER, ALLOCATABLE :: thread_y_end(:,:)
+     INTEGER, ALLOCATABLE :: thread_x_end(:,:)
+     INTEGER, ALLOCATABLE :: thread_ngms(:)
+     INTEGER, ALLOCATABLE :: thread_ngms_start(:)
+     INTEGER, ALLOCATABLE :: thread_ngms_end(:)
+     INTEGER, ALLOCATABLE :: cg_thread_ngms(:,:)
+     INTEGER, ALLOCATABLE :: cg_thread_ngms_start(:,:)
+     INTEGER, ALLOCATABLE :: cg_thread_ngms_end(:,:)
+     INTEGER, ALLOCATABLE :: thread_rspace(:)
+     INTEGER, ALLOCATABLE :: thread_rspace_start(:)
+     INTEGER, ALLOCATABLE :: thread_rspace_end(:)
+
+     INTEGER, ALLOCATABLE :: map_set_psi(:,:)
+     INTEGER, ALLOCATABLE :: map_transpose_y2x(:,:)
+     INTEGER, ALLOCATABLE :: map_transpose_x2y(:,:)
+     INTEGER :: zero_transpose_y2x_start( 2 )
+     INTEGER :: zero_transpose_y2x_end( 2 )
+     INTEGER, ALLOCATABLE :: map_y2z(:,:)
+     INTEGER, ALLOCATABLE :: map_z2y_wave(:,:)
+     INTEGER, ALLOCATABLE :: map_z2y_pot(:)
+     INTEGER, ALLOCATABLE :: zero_z2y_start(:,:)
+     INTEGER, ALLOCATABLE :: zero_z2y_end(:,:)
+
+     INTEGER :: nr1w
+     INTEGER :: nr1p
+     INTEGER :: my_nr3p
+     INTEGER :: nr3px
+     INTEGER :: nhg
+     INTEGER :: ngw
+     INTEGER :: nwst
+     INTEGER :: npst
+     INTEGER :: max_ngw
+     INTEGER :: max_nstates
+     INTEGER :: com_count
+
+     INTEGER :: which ! 1 -> wave sticks ; 2 -> pot sticks
+     INTEGER :: which_wave ! 1 -> rho ; -> 2 -> vpsi
+
+     DOUBLE PRECISION :: tscale
+
+     INTEGER :: small_chunks( 2 )
+     INTEGER :: big_chunks( 2 )
+     LOGICAL :: do_comm( 2 )
+     INTEGER :: comm_sendrecv(2,2)
+     INTEGER, ALLOCATABLE :: c2_com_num(:,:)
+     INTEGER, ALLOCATABLE :: c2_com_recv(:,:)
+
+  END TYPE
+  Type( FFT_TYPE_DESCRIPTOR ) :: tfft
+
 END MODULE fft
 

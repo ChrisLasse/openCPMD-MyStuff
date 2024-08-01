@@ -69,9 +69,15 @@ MODULE mp_interface
   PUBLIC :: mp_get_version
   PUBLIC :: mp_get_library_version
   PUBLIC :: mp_win_alloc_shared_mem
+  PUBLIC :: mp_win_alloc_shared_mem_central
   PUBLIC :: mp_win_sync
   PUBLIC :: mp_win_lock_all_shared
   PUBLIC :: mp_win_unlock_all_shared
+  PUBLIC :: mp_startall
+  PUBLIC :: mp_waitall
+  PUBLIC :: mp_testall
+  PUBLIC :: mp_send_init_COMPLEX
+  PUBLIC :: mp_recv_init_COMPLEX
   !
   ! interfaces
   !
@@ -1258,6 +1264,8 @@ CONTAINS
        requested_size=lda*n*mp_double_complex_in_bytes
     ELSEIF(type.EQ.'R'.OR.type.EQ.'r')THEN
        requested_size=lda*n*mp_double_in_bytes
+    ELSEIF(type.EQ.'L'.OR.type.EQ.'l')THEN
+       requested_size=lda*n*mp_logical_in_bytes
     ELSEIF(type.EQ.'D'.OR.type.EQ.'d')THEN
        DO index=1,size(alloc)
           IF(alloc(index))THEN
@@ -1338,6 +1346,150 @@ CONTAINS
     CALL mp_win_alloc_shared_mem('d',1,1,baseptr,nproc,mypos,comm)
 #endif
   END SUBROUTINE mp_win_dealloc_shared_mem
+
+  SUBROUTINE mp_startall( howmany, handles )
+    IMPLICIT NONE
+    ! ==--------------------------------------------------------------==
+    ! == Wrapper for MPI_STARTALL                                     ==
+    ! ==--------------------------------------------------------------==
+    ! Author: Christian L. Ritterhoff, FAU Erlangen Nuernberg, Sep 2023
+    INTEGER, INTENT(IN)                    :: howmany
+    TYPE( MPI_REQUEST ), INTENT(INOUT)     :: handles(:)
+    CHARACTER(*),PARAMETER::procedureN='mp_startall'
+
+    INTEGER :: ierr
+
+    CALL MPI_STARTALL( howmany, handles, ierr )
+    CALL mp_mpi_error_assert(ierr,procedureN,__LINE__,__FILE__)
+
+  END SUBROUTINE mp_startall
+
+  SUBROUTINE mp_waitall( howmany, handles )
+    IMPLICIT NONE
+    ! ==--------------------------------------------------------------==
+    ! == Wrapper for MPI_WAITALL                                     ==
+    ! ==--------------------------------------------------------------==
+    ! Author: Christian L. Ritterhoff, FAU Erlangen Nuernberg, Sep 2023
+    INTEGER, INTENT(IN)                    :: howmany
+    TYPE( MPI_REQUEST ), INTENT(INOUT)     :: handles(:)
+    CHARACTER(*),PARAMETER::procedureN='mp_waitall'
+
+    INTEGER :: ierr
+
+    CALL MPI_WAITALL( howmany, handles, MPI_STATUSES_IGNORE, ierr )
+    CALL mp_mpi_error_assert(ierr,procedureN,__LINE__,__FILE__)
+
+  END SUBROUTINE mp_waitall
+
+  SUBROUTINE mp_testall( howmany, handles )
+    IMPLICIT NONE
+    ! ==--------------------------------------------------------------==
+    ! == Wrapper for MPI_TESTALL                                     ==
+    ! ==--------------------------------------------------------------==
+    ! Author: Christian L. Ritterhoff, FAU Erlangen Nuernberg, Sep 2023
+    INTEGER, INTENT(IN)                    :: howmany
+    TYPE( MPI_REQUEST ), INTENT(INOUT)     :: handles(:)
+    CHARACTER(*),PARAMETER::procedureN='mp_testall'
+
+    LOGICAL :: flag
+    INTEGER :: ierr
+
+    CALL MPI_TESTALL( howmany, handles, flag, MPI_STATUSES_IGNORE, ierr )
+    CALL mp_mpi_error_assert(ierr,procedureN,__LINE__,__FILE__)
+
+  END SUBROUTINE mp_testall
+
+  SUBROUTINE mp_win_alloc_shared_mem_central( type, baseptr, window_number, winsize, me, task_count, comm, mpi_window )
+    IMPLICIT NONE
+    ! ==--------------------------------------------------------------==
+    ! == Return baseptr to shared memory window                       ==
+    ! == In difference to mp_win_alloc_shared_mem the shared          ==
+    ! == memory window is entirely allocated on/by the 0th task       ==
+    ! == For all tasks baseptr points to the beginning of the array   ==
+    ! ==--------------------------------------------------------------==
+    ! Author: Christian L. Ritterhoff, FAU Erlangen Nuernberg, Sep 2023
+
+    CHARACTER(1), INTENT(IN)                         :: type
+    TYPE(C_PTR), INTENT(OUT)                         :: baseptr( : )
+    INTEGER, INTENT(IN)                              :: winsize, me, task_count, window_number
+    TYPE(MPI_WIN), INTENT(INOUT)                     :: mpi_window(:)
+#ifdef __PARALLEL
+    type(MPI_COMM),INTENT(IN) :: comm
+#else
+    INTEGER,INTENT(IN) :: comm
+#endif
+
+    INTEGER :: displ, ierr
+    INTEGER(KIND=MPI_ADDRESS_KIND) :: windowsize
+    CHARACTER(*), PARAMETER                  :: procedureN = 'mp_win_alloc_shared_mem_central'
+    LOGICAL, SAVE :: existing( 99 ) = .false.
+
+    IF( existing( window_number ) ) THEN
+       CALL MPI_WIN_FREE( mpi_window( window_number ) , ierr )
+       CALL mp_mpi_error_assert(ierr,procedureN,__LINE__,__FILE__)
+    ELSE
+       existing( window_number ) = .true.
+    END IF
+
+    IF( type .eq. 'C' .or. type .eq. 'c' ) THEN
+       CALL MPI_TYPE_SIZE( mpi_double_complex, displ, ierr)
+    ELSE IF( type .eq. 'L' .or. type .eq. 'l' ) THEN
+       CALL MPI_TYPE_SIZE( mpi_logical, displ, ierr)
+    END IF
+    CALL mp_mpi_error_assert(ierr,procedureN,__LINE__,__FILE__)
+    IF ( me .eq. 0 ) then
+       windowsize = winsize * displ
+    ELSE
+       windowsize = 0
+    END IF
+
+    CALL MPI_WIN_ALLOCATE_SHARED( windowsize , displ, MPI_INFO_NULL, comm, baseptr(me+1), mpi_window( window_number ), ierr )
+    CALL mp_mpi_error_assert(ierr,procedureN,__LINE__,__FILE__)
+
+    IF ( me .ne. 0 ) then
+       CALL MPI_WIN_SHARED_QUERY( mpi_window( window_number ), 0, windowsize, displ, baseptr(1), ierr)
+       CALL mp_mpi_error_assert(ierr,procedureN,__LINE__,__FILE__)
+    END IF
+
+  END SUBROUTINE mp_win_alloc_shared_mem_central
+
+  SUBROUTINE mp_send_init_COMPLEX( send_array, location, sendsize, towhere, me, comm, handle )
+    IMPLICIT NONE
+    ! ==--------------------------------------------------------------==
+    ! == Wrapper for MPI_SEND_INIT                                    ==
+    ! ==--------------------------------------------------------------==
+    ! Author: Christian L. Ritterhoff, FAU Erlangen Nuernberg, Sep 2023
+    COMPLEX(selected_real_kind(14,200)), INTENT(IN)                :: send_array( : )
+    TYPE(MPI_COMM), INTENT(IN)             :: comm
+    INTEGER, INTENT(IN)                    :: location, sendsize, towhere, me
+    TYPE( MPI_REQUEST ), INTENT(OUT)     :: handle
+    CHARACTER(*),PARAMETER::procedureN='mp_send_init_COMPLEX'
+
+    INTEGER :: ierr
+
+    CALL MPI_SEND_INIT( send_array( 1 + location ), sendsize, MPI_DOUBLE_COMPLEX, towhere, me, comm, handle, ierr )
+    CALL mp_mpi_error_assert(ierr,procedureN,__LINE__,__FILE__)
+
+  END SUBROUTINE mp_send_init_COMPLEX
+
+  SUBROUTINE mp_recv_init_COMPLEX( recv_array, location, sendsize, fromwhere, comm, handle )
+    IMPLICIT NONE
+    ! ==--------------------------------------------------------------==
+    ! == Wrapper for MPI_RECV_INIT                                    ==
+    ! ==--------------------------------------------------------------==
+    ! Author: Christian L. Ritterhoff, FAU Erlangen Nuernberg, Sep 2023
+    COMPLEX(selected_real_kind(14,200)), INTENT(IN)                :: recv_array( : )
+    TYPE(MPI_COMM), INTENT(IN)             :: comm
+    INTEGER, INTENT(IN)                    :: location, sendsize, fromwhere
+    TYPE( MPI_REQUEST ), INTENT(OUT)     :: handle
+    CHARACTER(*),PARAMETER::procedureN='mp_send_init_COMPLEX'
+
+    INTEGER :: ierr
+
+    CALL MPI_RECV_INIT( recv_array( 1 + location ), sendsize, MPI_DOUBLE_COMPLEX, fromwhere, MPI_ANY_TAG, comm, handle, ierr )
+    CALL mp_mpi_error_assert(ierr,procedureN,__LINE__,__FILE__)
+
+  END SUBROUTINE mp_recv_init_COMPLEX
 
   !
   ! include file for the interfaces

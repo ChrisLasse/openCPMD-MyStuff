@@ -25,7 +25,7 @@ MODULE fftmain_utils
   USE fft,                             ONLY: &
        lfrm, lmsq, lr1, lr1m, lr1s, lr2s, lr3s, lrxpl, lsrm, mfrays, msqf, &
        msqs, msrays, qr1, qr1s, qr2s, qr3max, qr3min, qr3s, sp5, sp8, sp9, &
-       xf, yf, fft_residual, fft_total, fft_numbatches, fft_batchsize, locks_inv, locks_fw
+       xf, yf, fft_residual, fft_total, fft_numbatches, fft_batchsize, locks_inv, locks_fw, FFT_TYPE_DESCRIPTOR, fft_numbuff
   USE fft_maxfft,                      ONLY: maxfftn, maxfft
   USE fftcu_methods,                   ONLY: fftcu_frw_full_1,&
                                              fftcu_frw_full_2,&
@@ -35,6 +35,20 @@ MODULE fftmain_utils
                                              fftcu_inv_full_2,&
                                              fftcu_inv_sprs_1,&
                                              fftcu_inv_sprs_2
+  USE fftnew_utils,                    ONLY: Prep_fft_comm_preinitialized,&
+                                             comm_send,&
+                                             comm_recv,&
+                                             locks_calc_inv,&
+                                             locks_calc_fw,&
+                                             locks_com_inv,&
+                                             locks_com_fw,&
+                                             locks_sing_1,&
+                                             locks_sing_2,&
+                                             locks_omp,&
+                                             locks_calc_1,&
+                                             locks_calc_2,&
+                                             locks_omp_big,&
+                                             Make_Manual_Maps
   USE fftutil_utils,                   ONLY: fft_comm,&
                                              getz,&
                                              pack_x2y,&
@@ -49,7 +63,14 @@ MODULE fftmain_utils
                                              unpack_x2y_n,&
                                              pack_x2y_n,&
                                              unpack_y2x,&
-                                             unpack_y2x_n
+                                             unpack_y2x_n,&
+                                             fft_comm_preinitialized,&
+                                             invfft_z_section,&
+                                             invfft_y_section,&
+                                             invfft_x_section,&
+                                             fwfft_z_section,&
+                                             fwfft_y_section,&
+                                             fwfft_x_section
   USE kinds,                           ONLY: real_8,&
                                              int_8
   USE machine,                         ONLY: m_walltime
@@ -58,6 +79,7 @@ MODULE fftmain_utils
                                              mltfft_essl,&
                                              mltfft_fftw,&
                                              mltfft_hp
+  USE mp_interface,                    ONLY: mp_win_alloc_shared_mem
   USE parac,                           ONLY: parai
   USE system,                          ONLY: cntl,&
                                              fpar
@@ -68,7 +90,9 @@ MODULE fftmain_utils
   !$ USE omp_lib, ONLY: omp_in_parallel, omp_get_thread_num, &
   !$ omp_set_num_threads, omp_set_nested
 
-  USE, INTRINSIC :: ISO_C_BINDING,     ONLY: C_PTR, C_NULL_PTR
+  USE, INTRINSIC :: ISO_C_BINDING,     ONLY: C_PTR,&
+                                             C_NULL_PTR,&
+                                             C_F_POINTER
 #ifdef _USE_SCRATCHLIBRARY
   USE scratch_interface,               ONLY: request_scratch,&
                                              free_scratch
@@ -83,7 +107,9 @@ MODULE fftmain_utils
   PUBLIC :: fwfftn
   PUBLIC :: invfftn_batch
   PUBLIC :: fwfftn_batch
-  !public :: fftnew
+
+  PUBLIC :: invfft_new_gdistribution_batch
+  PUBLIC :: fwfft_new_gdistribution_batch
 
 
 CONTAINS
@@ -604,6 +630,7 @@ CONTAINS
     ! == FUNCTION F. THE FOURIER TRANSFORM IS                         ==
     ! == RETURNED IN F (THE INPUT F IS OVERWRITTEN).                  ==
     ! ==--------------------------------------------------------------==
+    USE fft,                             ONLY : tfft
 #ifdef __PARALLEL
     USE mpi_f08
 #endif
@@ -630,7 +657,7 @@ CONTAINS
        CALL fftnew_cuda(isign,f,sparse, comm, thread_view=thread_view, &
             & copy_data_to_device=copy_data_to_device, copy_data_to_host=copy_data_to_host )
     ELSE
-       CALL fftnew(isign,f,sparse, parai%allgrp )
+       CALL fft_new_gdistribution( isign, tfft, f, tfft%nhg, tfft%nr1p, tfft%ir1p, tfft%nsp )
     ENDIF
     CALL tihalt(procedureN,isub)
     ! ==--------------------------------------------------------------==
@@ -642,6 +669,7 @@ CONTAINS
     ! == FUNCTION F. THE FOURIER TRANSFORM IS                         ==
     ! == RETURNED IN F IN OUTPUT (THE INPUT F IS OVERWRITTEN).        ==
     ! ==--------------------------------------------------------------==
+    USE fft,                             ONLY :tfft
 #ifdef __PARALLEL
     USE mpi_f08
 #endif
@@ -668,13 +696,12 @@ CONTAINS
        CALL fftnew_cuda(isign,f,sparse, comm, thread_view=thread_view, &
             & copy_data_to_device=copy_data_to_device, copy_data_to_host=copy_data_to_host )
     ELSE
-       CALL fftnew(isign,f,sparse, parai%allgrp )
+       CALL fft_new_gdistribution( isign, tfft, f, tfft%nhg, tfft%nr1p, tfft%ir1p, tfft%nsp )
     ENDIF
     CALL tihalt(procedureN,isub)
     ! ==--------------------------------------------------------------==
   END SUBROUTINE fwfftn
   ! ==================================================================
-
   SUBROUTINE fwfftn_batch(f,len_f,n,swap,step,ibatch)
     ! ==--------------------------------------------------------------==
     ! == COMPUTES THE FORWARD FOURIER TRANSFORM OF A COMPLEX          ==
@@ -729,5 +756,371 @@ CONTAINS
     END IF
     ! ==--------------------------------------------------------------==
   END SUBROUTINE invfftn_batch
+
+  SUBROUTINE invfft_new_gdistribution_batch( tfft, step, batch_size, ispec, remswitch, mythread, counter, work_buffer, f_inout1, f_inout2, f_inout3, f_inout4 )
+    IMPLICIT NONE
+
+    TYPE(FFT_TYPE_DESCRIPTOR), INTENT(INOUT) :: tfft
+    INTEGER, INTENT(IN) :: step, batch_size, remswitch, mythread, counter, work_buffer, ispec
+    COMPLEX(real_8), OPTIONAL, INTENT(INOUT) :: f_inout1(:,:)
+    COMPLEX(real_8), OPTIONAL, INTENT(INOUT) :: f_inout2(:,:)
+    COMPLEX(real_8), OPTIONAL, INTENT(INOUT) :: f_inout3(:,:)
+    COMPLEX(real_8), OPTIONAL, INTENT(INOUT) :: f_inout4(:,:)
+
+    CHARACTER(*), PARAMETER :: procedureN = 'invfft_new_gdistribution_batch'
+
+    INTEGER :: isub, isub4
+
+    IF( cntl%fft_tune_batchsize ) THEN
+       IF( parai%ncpus_FFT .eq. 1 .or. mythread .eq. 1 ) CALL tiset(procedureN//'_tuning',isub4)
+    ELSE
+!       IF( parai%ncpus_FFT .eq. 1 .or. mythread .eq. 1 ) CALL tiset(procedureN,isub)
+       CALL tiset(procedureN,isub)
+    END IF
+
+    IF( step .eq. 1 ) THEN
+       CALL fft_new_gdistribution_batch( tfft, -1, step, batch_size, ispec, remswitch, mythread, counter, work_buffer, &
+                                f_inout1=f_inout1, f_inout2=f_inout2, f_inout3=f_inout3, f_inout4=f_inout4 )
+    ELSE IF( step .eq. 2 ) THEN
+       CALL fft_new_gdistribution_batch( tfft, -1, step, batch_size, ispec, remswitch, mythread, counter, work_buffer )
+    ELSE IF( step .eq. 3 ) THEN
+       CALL fft_new_gdistribution_batch( tfft, -1, step, batch_size, ispec, remswitch, mythread, counter, work_buffer, &
+                                f_inout1=f_inout1, f_inout2=f_inout2, f_inout3=f_inout3, f_inout4=f_inout4 )
+    ELSE IF( step .eq. 4 ) THEN
+       CALL fft_new_gdistribution_batch( tfft, -1, step, batch_size, ispec, remswitch, mythread, counter, work_buffer, &
+                                f_inout1=f_inout1, f_inout2=f_inout2, f_inout3=f_inout3, f_inout4=f_inout4 )
+    END IF
+
+    IF( cntl%fft_tune_batchsize ) THEN
+       IF( parai%ncpus_FFT .eq. 1 .or. mythread .eq. 1 ) CALL tihalt(procedureN//'_tuning',isub4)
+    ELSE
+!       IF( parai%ncpus_FFT .eq. 1 .or. mythread .eq. 1 ) CALL tihalt(procedureN,isub)
+       CALL tihalt(procedureN,isub)
+    END IF
+
+  END SUBROUTINE invfft_new_gdistribution_batch
+
+  SUBROUTINE fwfft_new_gdistribution_batch( tfft, step, batch_size, ispec, remswitch, mythread, counter, work_buffer, f_inout1, f_inout2, f_inout3, f_inout4 )
+    IMPLICIT NONE
+
+    TYPE(FFT_TYPE_DESCRIPTOR), INTENT(INOUT) :: tfft
+    INTEGER, INTENT(IN) :: step, batch_size, remswitch, mythread, counter, work_buffer, ispec
+    COMPLEX(real_8), OPTIONAL, INTENT(INOUT) :: f_inout1(:,:)
+    COMPLEX(real_8), OPTIONAL, INTENT(INOUT) :: f_inout2(:,:)
+    COMPLEX(real_8), OPTIONAL, INTENT(INOUT) :: f_inout3(:,:)
+    COMPLEX(real_8), OPTIONAL, INTENT(INOUT) :: f_inout4(:,:)
+
+    CHARACTER(*), PARAMETER :: procedureN = 'fwfft_new_gdistribution_batch'
+
+    INTEGER :: isub, isub4
+
+    IF( cntl%fft_tune_batchsize ) THEN
+       IF( parai%ncpus_FFT .eq. 1 .or. mythread .eq. 1 ) CALL tiset(procedureN//'_tuning',isub4)
+    ELSE
+!       IF( parai%ncpus_FFT .eq. 1 .or. mythread .eq. 1 ) CALL tiset(procedureN,isub)
+       CALL tiset(procedureN,isub)
+    END IF
+
+    IF( step .eq. 1 ) THEN
+       CALL fft_new_gdistribution_batch( tfft, 1, step, batch_size, ispec, remswitch, mythread, counter, work_buffer, &
+                                f_inout1=f_inout1, f_inout2=f_inout2, f_inout3=f_inout3, f_inout4=f_inout4 )
+    ELSE IF( step .eq. 2 ) THEN
+       CALL fft_new_gdistribution_batch( tfft, 1, step, batch_size, ispec, remswitch, mythread, counter, work_buffer, &
+                                f_inout1=f_inout1, f_inout2=f_inout2, f_inout3=f_inout3, f_inout4=f_inout4 )
+    ELSE IF( step .eq. 3 ) THEN
+       CALL fft_new_gdistribution_batch( tfft, 1, step, batch_size, ispec, remswitch, mythread, counter, work_buffer )
+    ELSE IF( step .eq. 4 ) THEN
+       CALL fft_new_gdistribution_batch( tfft, 1, step, batch_size, ispec, remswitch, mythread, counter, work_buffer, &
+                                f_inout1=f_inout1, f_inout2=f_inout2, f_inout3=f_inout3, f_inout4=f_inout4 )
+    END IF
+
+    IF( cntl%fft_tune_batchsize ) THEN
+       IF( parai%ncpus_FFT .eq. 1 .or. mythread .eq. 1 ) CALL tihalt(procedureN//'_tuning',isub4)
+    ELSE
+!       IF( parai%ncpus_FFT .eq. 1 .or. mythread .eq. 1 ) CALL tihalt(procedureN,isub)
+       CALL tihalt(procedureN,isub)
+    END IF
+
+  END SUBROUTINE fwfft_new_gdistribution_batch
+
+  SUBROUTINE fft_new_gdistribution_batch( tfft, isign, step, batch_size, ispec, remswitch, mythread, counter, work_buffer, f_inout1, f_inout2, f_inout3, f_inout4 )
+    IMPLICIT NONE
+
+    TYPE(FFT_TYPE_DESCRIPTOR), INTENT(INOUT) ::tfft
+    INTEGER, INTENT(IN) :: isign, step, batch_size, counter, work_buffer, ispec
+    INTEGER, INTENT(IN) :: remswitch, mythread
+    COMPLEX(real_8), OPTIONAL, INTENT(INOUT) :: f_inout1(:,:)
+    COMPLEX(real_8), OPTIONAL, INTENT(INOUT) :: f_inout2(:,:)
+    COMPLEX(real_8), OPTIONAL, INTENT(INOUT) :: f_inout3(:,:)
+    COMPLEX(real_8), OPTIONAL, INTENT(INOUT) :: f_inout4(:,:)
+
+    CHARACTER(*), PARAMETER :: procedureN = 'fft_new_gdistribution_batch'
+
+    INTEGER :: current, isub, isub4, ierr
+
+    IF( cntl%fft_tune_batchsize ) THEN
+       IF( parai%ncpus_FFT .eq. 1 .or. mythread .eq. 1 ) CALL tiset(procedureN//'_tuning',isub4)
+    ELSE
+       IF( parai%ncpus_FFT .eq. 1 .or. mythread .eq. 1 ) CALL tiset(procedureN,isub)
+    END IF
+
+    current = (counter-1)*fft_batchsize
+
+    IF( isign .eq. -1 ) THEN !!  invfft
+
+       IF( step .eq. 1 ) THEN
+
+          CALL invfft_z_section( tfft, f_inout1(:,1), f_inout2(:,work_buffer), f_inout3(:,work_buffer), batch_size, remswitch, mythread, tfft%nsw, current )
+
+          !$  locks_omp( mythread+1, counter, 2 ) = .false.
+          !$omp flush( locks_omp )
+          !$  IF( parai%ncpus_FFT .eq. 1 .or. .not. ANY( locks_omp( :, counter, 2 ) ) ) THEN
+          !$     locks_calc_inv( parai%node_me+1, counter ) = .false.
+          !$omp flush( locks_calc_inv )
+          !$  END IF
+
+       ELSE IF( step .eq. 2 ) THEN
+
+          !$omp flush( locks_calc_inv )
+          !$  DO WHILE( ANY( locks_calc_inv( :, counter ) ) )
+          !$omp flush( locks_calc_inv )
+          !$  END DO
+
+          CALL fft_comm_preinitialized( tfft, remswitch, work_buffer, 1 )
+
+          !$  locks_com_inv( parai%node_me+1, counter ) = .false.
+          !$omp flush( locks_com_inv )
+
+       ELSE IF( step .eq. 3 ) THEN
+
+          !$omp flush( locks_com_inv )
+          !$  DO WHILE( ANY( locks_com_inv( :, counter ) ) .and. parai%nnode .ne. 1 )
+          !$omp flush( locks_com_inv )
+          !$  END DO
+
+          IF( tfft%which_wave .eq. 2 ) THEN
+
+             !$  locks_omp_big( mythread+1, ispec, counter, 1 ) = .false.
+             !$omp flush( locks_omp_big )
+             !$  DO WHILE( ANY( locks_omp_big( :, ispec, counter, 1 ) ) )
+             !$omp flush( locks_omp_big )
+             !$  END DO
+
+          END IF
+
+          CALL invfft_y_section( tfft, f_inout1(:,work_buffer), f_inout2(:,1), &
+                                 tfft%map_z2y_wave(:,remswitch), mythread, tfft%nr1w, ispec, counter )
+
+          !$  locks_omp_big( mythread+1, ispec, counter, 2 ) = .false.
+          !$omp flush( locks_omp_big )
+          !$  DO WHILE( ANY( locks_omp_big( :, ispec, counter, 2 ) ) )
+          !$omp flush( locks_omp_big )
+          !$  END DO
+
+
+       ELSE IF( step .eq. 4 ) THEN
+
+          CALL invfft_x_section( tfft, f_inout1(:,1), f_inout2(:,1), mythread, tfft%nr1w )
+
+          IF( tfft%which_wave .eq. 1 ) THEN
+
+             !$  locks_omp_big( mythread+1, ispec, counter, 3 ) = .false.
+             !$omp flush( locks_omp_big )
+             !$  DO WHILE( ANY( locks_omp_big( :, ispec, counter, 3 ) ) )
+             !$omp flush( locks_omp_big )
+             !$  END DO
+
+          END IF
+
+       END IF
+
+    ELSE !! fwfft
+
+       IF( step .eq. 1 ) THEN
+
+          CALL fwfft_x_section( tfft, f_inout1(:,1), mythread )
+
+          !$  locks_omp_big( mythread+1, ispec, counter, 4 ) = .false.
+          !$omp flush( locks_omp_big )
+          !$  DO WHILE( ANY( locks_omp_big( :, ispec, counter, 4 ) ) )
+          !$omp flush( locks_omp_big )
+          !$  END DO
+
+       ELSE IF( step .eq. 2 ) THEN
+
+          CALL fwfft_y_section( tfft, f_inout1(:,1), f_inout2(:,1), f_inout3(:,work_buffer), f_inout4(:,work_buffer), &
+                                    tfft%map_y2z(:,1), batch_size, ispec, counter, mythread )
+
+       ELSE IF( step .eq. 3 ) THEN
+
+          !$omp flush( locks_calc_fw )
+          !$  DO WHILE( ANY( locks_calc_fw( :, counter ) ) )
+          !$omp flush( locks_calc_fw )
+          !$  END DO
+
+          CALL fft_comm_preinitialized( tfft, remswitch, work_buffer, 1 )
+
+          !$  locks_com_fw( parai%node_me+1, counter ) = .false.
+          !$omp flush( locks_com_fw )
+
+       ELSE IF( step .eq. 4 ) THEN
+
+          !$omp flush( locks_com_fw )
+          !$  DO WHILE( ANY( locks_com_fw( :, counter ) ) .and. parai%nnode .ne. 1 )
+          !$omp flush( locks_com_fw )
+          !$  END DO
+
+          CALL fwfft_z_section( tfft, f_inout1(:,work_buffer), f_inout2, counter, batch_size, remswitch, mythread, tfft%nsw )
+
+          !$  locks_omp( mythread+1, counter, 3 ) = .false.
+          !$omp flush( locks_omp )
+          !$  DO WHILE( ANY( locks_omp( :, counter, 3 ) ) )
+          !$omp flush( locks_omp )
+          !$  END DO
+
+       END IF
+
+    END IF
+
+    IF( cntl%fft_tune_batchsize ) THEN
+       IF( parai%ncpus_FFT .eq. 1 .or. mythread .eq. 1 ) CALL tihalt(procedureN//'_tuning',isub4)
+    ELSE
+       IF( parai%ncpus_FFT .eq. 1 .or. mythread .eq. 1 ) CALL tihalt(procedureN,isub)
+    END IF
+
+  END SUBROUTINE fft_new_gdistribution_batch
+
+  SUBROUTINE fft_new_gdistribution( isign, tfft, f, ngs, nr1s, ir1s, nss )
+
+    IMPLICIT NONE
+
+    TYPE(FFT_TYPE_DESCRIPTOR), INTENT(INOUT) :: tfft
+    INTEGER, INTENT(IN) :: isign, ngs
+    COMPLEX(real_8), TARGET, INTENT(INOUT) :: f(:)
+    INTEGER, INTENT(IN) :: ir1s(:), nss(:), nr1s
+
+#ifdef _USE_SCRATCHLIBRARY
+    COMPLEX(real_8), POINTER, SAVE __CONTIGUOUS, ASYNCHRONOUS :: aux(:,:)
+#else
+    COMPLEX(real_8), ALLOCATABLE, SAVE, TARGET, ASYNCHRONOUS  :: aux(:,:)
+#endif
+
+    INTEGER(int_8) :: il_aux(2)
+    INTEGER :: i, ierr, isub, mythread
+    CHARACTER(*), PARAMETER                  :: procedureN = 'fft_new_gdistribution'
+    LOGICAL, SAVE :: first = .true.
+    INTEGER, SAVE :: sendsize
+    TYPE(C_PTR) :: baseptr( 0:parai%node_nproc-1 )
+    INTEGER :: arrayshape(3)
+    COMPLEX(real_8), SAVE, POINTER, CONTIGUOUS   :: Big_Pointer(:,:,:)
+
+    CALL tiset(procedureN,isub)
+
+    il_aux(1) = fpar%kr2s * nr1s * tfft%my_nr3p
+    il_aux(2) = 1
+#ifdef _USE_SCRATCHLIBRARY
+    CALL request_scratch(il_aux,aux,procedureN//'_aux',ierr)
+    IF(ierr/=0) CALL stopgm(procedureN,'cannot allocate aux', &
+         __LINE__,__FILE__)
+#else
+    IF( .not. allocated( aux ) ) ALLOCATE( aux( il_aux(1), il_aux(2) ) )
+    IF(ierr/=0) CALL stopgm(procedureN,'cannot allocate aux', &
+         __LINE__,__FILE__)
+#endif
+
+    tfft%which = 2
+
+    IF( first ) THEN
+
+       first = .false.
+
+       sendsize = MAXVAL ( tfft%nr3p ) * MAXVAL( nss ) * parai%max_node_nproc * parai%max_node_nproc
+
+       CALL mp_win_alloc_shared_mem( 'c', sendsize*parai%nnode*2, 1, baseptr, parai%node_nproc, parai%node_me, parai%node_grp )
+
+       arrayshape(1) = sendsize*parai%nnode
+       arrayshape(2) = 1
+       arrayshape(3) = 2
+       CALL C_F_POINTER( baseptr(0), Big_Pointer, arrayshape )
+       comm_send => Big_Pointer(:,:,1)
+       comm_recv => Big_Pointer(:,:,2)
+
+       CALL Prep_fft_comm_preinitialized( comm_send, comm_recv, sendsize, 0, parai%nnode, parai%me, parai%my_node, parai%node_me, &
+                          parai%node_nproc, parai%max_node_nproc, parai%cp_overview, 1, tfft%comm_sendrecv(:,2), tfft%do_comm(2), 2 )
+
+       CALL Make_Manual_Maps( tfft, 1, 0, nss, nr1s, ngs, tfft%which, 0 )
+
+       IF( .not. allocated( locks_omp ) ) ALLOCATE( locks_omp( parai%ncpus_FFT, 1, 20 ) )
+       !$ locks_omp = .true.
+       IF( .not. allocated( locks_omp_big ) ) ALLOCATE( locks_omp_big( parai%ncpus_FFT, 1, 1, 20 ) )
+       !$ locks_omp_big = .true.
+
+    END IF
+
+    CALL MPI_BARRIER( parai%allgrp, ierr )
+    !$ locks_omp = .true.
+    !$ locks_omp_big = .true.
+
+    !$OMP parallel num_threads( parai%ncpus_FFT ) &
+    !$omp private(mythread) &
+    !$omp proc_bind(close)
+    !$ mythread = omp_get_thread_num()
+
+    IF( isign .eq. -1 ) THEN !!  invfft
+
+
+       CALL invfft_z_section( tfft, f, comm_send(:,1), comm_recv(:,1), 1, 1, mythread, nss, 1 )
+
+       !$OMP barrier
+       !$OMP master
+          CALL MPI_BARRIER( parai%allgrp, ierr )
+          IF( tfft%do_comm(2) ) CALL fft_comm_preinitialized( tfft, 1, 1, 2 )
+          CALL MPI_BARRIER( parai%allgrp, ierr )
+       !$OMP end master
+       !$OMP barrier
+
+       CALL invfft_y_section( tfft, comm_recv(:,1), aux(:,1), tfft%map_z2y_pot, mythread, tfft%nr1p, 1, 1 )
+
+       !$OMP barrier
+
+       CALL invfft_x_section( tfft, aux(:,1), f, mythread, tfft%nr1p )
+
+    ELSE !! fw fft
+
+       CALL fwfft_x_section( tfft, f, mythread )
+
+       !$OMP barrier
+
+       CALL fwfft_y_section( tfft, f, aux(:,1), comm_send(:,1), comm_recv(:,1), tfft%map_y2z(:,2), 1, 1, 1, mythread )
+
+       !$OMP barrier
+       !$OMP master
+          CALL MPI_BARRIER( parai%allgrp, ierr )
+          IF( tfft%do_comm(2) ) CALL fft_comm_preinitialized( tfft, 1, 1, 2 )
+          CALL MPI_BARRIER( parai%allgrp, ierr )
+       !$OMP end master
+       !$OMP barrier
+
+       CALL fwfft_z_section( tfft, comm_recv(:,1), f, 1, 1, 1, mythread, tfft%nsp, tfft%tscale )
+
+    END IF
+
+    !$omp end parallel
+
+#ifdef _USE_SCRATCHLIBRARY
+    CALL free_scratch(il_aux,aux,procedureN//'_aux',ierr)
+    IF(ierr/=0) CALL stopgm(procedureN,'cannot deallocate aux', &
+         __LINE__,__FILE__)
+#else
+    DEALLOCATE(aux,STAT=ierr)
+    IF(ierr/=0) CALL stopgm(procedureN,'cannot deallocate aux', &
+         __LINE__,__FILE__)
+#endif
+
+    tfft%which = 1
+
+    CALL tihalt(procedureN,isub)
+
+  END SUBROUTINE fft_new_gdistribution
 
 END MODULE fftmain_utils

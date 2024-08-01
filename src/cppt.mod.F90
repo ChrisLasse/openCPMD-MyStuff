@@ -18,12 +18,16 @@ MODULE cppt
   ! == ISPTR(NHGL+1) last index IG for the shell                    ==
   ! == INDZS(NGW)  index for G-compon. of wavefunction in PSI (I1<0)==
   ! == NZH(NGW)    index for G-compon. of wavefunction in PSI (I1>0)==
+  ! == NZH_R(NNR1)  reverse index of nzh                             ==
+  ! == INDZ_R(NNR1) reverse index of indz                            ==
   ! ==--------------------------------------------------------------==
   INTEGER, ALLOCATABLE, TARGET :: nzh(:)
   INTEGER, ALLOCATABLE, TARGET :: nzhs(:)
   INTEGER, ALLOCATABLE, TARGET :: indz(:)
   INTEGER, ALLOCATABLE, TARGET :: indzs(:)
   INTEGER, ALLOCATABLE, TARGET :: inyh(:,:)
+  INTEGER, ALLOCATABLE, TARGET :: nzh_r(:)
+  INTEGER, ALLOCATABLE, TARGET :: indz_r(:)
 
   INTEGER, ALLOCATABLE :: igl(:)
   INTEGER, ALLOCATABLE :: isptr(:)

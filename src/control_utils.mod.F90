@@ -3765,6 +3765,16 @@ CONTAINS
                    ENDIF
                    
                 ENDIF
+             ELSEIF ( keyword_contains(line,'PRESCRIBE_BATCHSIZE') ) THEN
+                cntl%fft_prescribe_batchsize=.TRUE.
+                cntl%fft_tune_batchsize=.FALSE.
+                READ(iunit,'(A)',iostat=ierr) line
+                CALL readsi(line,1,last,cnti%fft_prescribed_batchsize,erread)
+                IF (erread) THEN
+                   error_message        = "ERROR WHILE READING VALUE"
+                   something_went_wrong = .true.
+                   go_on_reading        = .false.
+                ENDIF
              ELSEIF ( keyword_contains(line,'RNLSM1_BLOCKCOUNT') ) THEN
                 READ(iunit,'(A)',iostat=ierr) line
                 CALL readsi(line,1,last,cnti%rnlsm1_bc,erread)
