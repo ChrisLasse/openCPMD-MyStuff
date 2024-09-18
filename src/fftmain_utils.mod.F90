@@ -40,11 +40,14 @@ MODULE fftmain_utils
                                              fft_new_gdist_setup_noshared,&
                                              Prep_fft_comm_preinitialized2,&
                                              comm_send,&
+                                             comm_send2,&
                                              comm_recv,&
+                                             comm_recv2,&
                                              locks_calc_inv,&
                                              locks_calc_fw,&
                                              locks_com_inv,&
                                              locks_com_fw,&
+                                             locks_cc_invfw,&
                                              locks_sing_1,&
                                              locks_sing_2,&
                                              locks_omp,&
@@ -72,6 +75,7 @@ MODULE fftmain_utils
                                              invfft_z_section,&
                                              invfft_z_section2,&
                                              invfft_y_section,&
+                                             invfft_y_section2,&
                                              invfft_x_section,&
                                              fwfft_z_section,&
                                              fwfft_z_section2,&
@@ -886,32 +890,32 @@ CONTAINS
 
        IF( step .eq. 1 ) THEN
 
-          CALL invfft_z_section( tfft, f_inout1(:,1), f_inout2(:,work_buffer), f_inout3(:,work_buffer), batch_size, remswitch, mythread, tfft%nsw, current )
+          CALL invfft_z_section2( tfft, f_inout1(:,1), f_inout2(:,work_buffer), f_inout3(:,work_buffer), batch_size, remswitch, mythread, tfft%nsw, current )
 
           !$  locks_omp( mythread+1, counter, 2 ) = .false.
           !$omp flush( locks_omp )
           !$  IF( parai%ncpus_FFT .eq. 1 .or. .not. ANY( locks_omp( :, counter, 2 ) ) ) THEN
-          !$     locks_calc_inv( parai%node_me+1, counter ) = .false.
-          !$omp flush( locks_calc_inv )
+          !$     locks_cc_invfw( counter, 1 ) = .false.
+          !$omp flush( locks_cc_invfw )
           !$  END IF
 
        ELSE IF( step .eq. 2 ) THEN
 
-          !$omp flush( locks_calc_inv )
-          !$  DO WHILE( ANY( locks_calc_inv( :, counter ) ) )
-          !$omp flush( locks_calc_inv )
+          !$omp flush( locks_cc_invfw )
+          !$  DO WHILE( locks_cc_invfw( counter, 1 ) )
+          !$omp flush( locks_cc_invfw )
           !$  END DO
 
-          CALL fft_comm_preinitialized( tfft, remswitch, work_buffer, 1 )
+          CALL fft_comm_preinitialized2( tfft, remswitch, work_buffer, 1 )
 
-          !$  locks_com_inv( parai%node_me+1, counter ) = .false.
-          !$omp flush( locks_com_inv )
+          !$  locks_cc_invfw( counter, 2 ) = .false.
+          !$omp flush( locks_cc_invfw )
 
        ELSE IF( step .eq. 3 ) THEN
 
-          !$omp flush( locks_com_inv )
-          !$  DO WHILE( ANY( locks_com_inv( :, counter ) ) .and. parai%nnode .ne. 1 )
-          !$omp flush( locks_com_inv )
+          !$omp flush( locks_cc_invfw )
+          !$  DO WHILE( locks_cc_invfw( counter, 2 ) .and. parai%cp_nproc .ne. 1 )
+          !$omp flush( locks_cc_invfw )
           !$  END DO
 
           IF( tfft%which_wave .eq. 2 ) THEN
@@ -924,7 +928,7 @@ CONTAINS
 
           END IF
 
-          CALL invfft_y_section( tfft, f_inout1(:,work_buffer), f_inout2(:,1), &
+          CALL invfft_y_section2( tfft, f_inout1(:,work_buffer), f_inout2(:,1), &
                                  tfft%map_z2y_wave(:,remswitch), mythread, tfft%nr1w, ispec, counter )
 
           !$  locks_omp_big( mythread+1, ispec, counter, 2 ) = .false.
@@ -964,29 +968,29 @@ CONTAINS
 
        ELSE IF( step .eq. 2 ) THEN
 
-          CALL fwfft_y_section( tfft, f_inout1(:,1), f_inout2(:,1), f_inout3(:,work_buffer), f_inout4(:,work_buffer), &
+          CALL fwfft_y_section2( tfft, f_inout1(:,1), f_inout2(:,1), f_inout3(:,work_buffer), f_inout4(:,work_buffer), &
                                     tfft%map_y2z(:,1), batch_size, ispec, counter, mythread )
 
        ELSE IF( step .eq. 3 ) THEN
 
-          !$omp flush( locks_calc_fw )
-          !$  DO WHILE( ANY( locks_calc_fw( :, counter ) ) )
-          !$omp flush( locks_calc_fw )
+          !$omp flush( locks_cc_invfw )
+          !$  DO WHILE( locks_cc_invfw( counter,3  ) )
+          !$omp flush( locks_cc_invfw )
           !$  END DO
 
-          CALL fft_comm_preinitialized( tfft, remswitch, work_buffer, 1 )
+          CALL fft_comm_preinitialized2( tfft, remswitch, work_buffer, 1 )
 
-          !$  locks_com_fw( parai%node_me+1, counter ) = .false.
-          !$omp flush( locks_com_fw )
+          !$  locks_cc_invfw( counter, 4 ) = .false.
+          !$omp flush( locks_cc_invfw )
 
        ELSE IF( step .eq. 4 ) THEN
 
-          !$omp flush( locks_com_fw )
-          !$  DO WHILE( ANY( locks_com_fw( :, counter ) ) .and. parai%nnode .ne. 1 )
-          !$omp flush( locks_com_fw )
+          !$omp flush( locks_cc_invfw )
+          !$  DO WHILE( locks_cc_invfw( counter, 4 ) .and. parai%cp_nproc .ne. 1 )
+          !$omp flush( locks_cc_invfw )
           !$  END DO
 
-          CALL fwfft_z_section( tfft, f_inout1(:,work_buffer), f_inout2, counter, batch_size, remswitch, mythread, tfft%nsw )
+          CALL fwfft_z_section2( tfft, f_inout1(:,work_buffer), f_inout2, counter, batch_size, remswitch, mythread, tfft%nsw )
 
           !$  locks_omp( mythread+1, counter, 3 ) = .false.
           !$omp flush( locks_omp )

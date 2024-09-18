@@ -57,6 +57,7 @@ MODULE fftnew_utils
   PUBLIC :: addfftnset
   !public :: setrays
   PUBLIC :: fft_new_gdist_batch_setup
+  PUBLIC :: fft_new_gdist_batch_setup2
   PUBLIC :: fft_new_gdist_setup
   PUBLIC :: fft_new_gdist_setup_noshared
   PUBLIC :: Prep_fft_comm_preinitialized
@@ -70,6 +71,10 @@ MODULE fftnew_utils
   PUBLIC :: comm_send
   COMPLEX(real_8), POINTER, SAVE, CONTIGUOUS :: comm_recv(:,:)
   PUBLIC :: comm_recv
+  COMPLEX(real_8), ALLOCATABLE, SAVE, ASYNCHRONOUS :: comm_send2(:,:)
+  PUBLIC :: comm_send2
+  COMPLEX(real_8), ALLOCATABLE, SAVE, ASYNCHRONOUS :: comm_recv2(:,:)
+  PUBLIC :: comm_recv2
   LOGICAL, POINTER, SAVE, CONTIGUOUS :: locks_calc_inv(:,:)
   PUBLIC :: locks_calc_inv
   LOGICAL, POINTER, SAVE, CONTIGUOUS :: locks_com_inv(:,:)
@@ -82,6 +87,8 @@ MODULE fftnew_utils
   PUBLIC :: locks_sing_1
   LOGICAL, POINTER, SAVE, CONTIGUOUS :: locks_sing_2(:,:)
   PUBLIC :: locks_sing_2
+  LOGICAL, ALLOCATABLE, SAVE :: locks_cc_invfw(:,:)
+  PUBLIC :: locks_cc_invfw
   LOGICAL, ALLOCATABLE, SAVE :: locks_omp(:,:,:)
   PUBLIC :: locks_omp
   LOGICAL, ALLOCATABLE, SAVE :: locks_omp_big(:,:,:,:)
@@ -1027,6 +1034,89 @@ CONTAINS
     END IF
 
   END SUBROUTINE
+
+  SUBROUTINE fft_new_gdist_batch_setup2( tfft, nstate, sendsize, sendsize_rem, spin )
+    IMPLICIT NONE
+
+    TYPE(FFT_TYPE_DESCRIPTOR), INTENT(INOUT) :: tfft
+    INTEGER, INTENT(IN)  :: nstate
+    INTEGER, INTENT(OUT) :: sendsize, sendsize_rem
+    INTEGER, ALLOCATABLE, INTENT(INOUT) :: spin(:)
+
+    INTEGER :: ierr, Com_in_locks, sendsize_pot, irun, i, j
+    INTEGER, SAVE :: remember_batch = 0
+    LOGICAL, SAVE :: first, DEBUG_shared_mem = .false.
+    TYPE(C_PTR) :: baseptr( 0:parai%node_nproc-1 )
+    INTEGER :: arrayshape(3,4), needed_size(4)
+    CHARACTER(*), PARAMETER                  :: procedureN = 'Pre_fft_new_gdistribution_setup'
+    COMPLEX(real_8), SAVE, POINTER, CONTIGUOUS   :: Big_Com_Pointer(:,:,:)
+    LOGICAL,         SAVE, POINTER, CONTIGUOUS   :: Big_1Log_Pointer(:,:,:)
+    LOGICAL,         SAVE, POINTER, CONTIGUOUS   :: Big_2Log_Pointer(:,:,:)
+    LOGICAL,         SAVE, POINTER, CONTIGUOUS   :: Big_3Log_Pointer(:,:,:)
+    LOGICAL :: war(4)
+
+    fft_numbuff = 3
+    IF( cntl%krwfn ) fft_numbuff = 2
+    IF( .not. ( cntl%overlapp_comm_comp .and. fft_numbatches .gt. 1 ) ) fft_numbuff = 1
+
+    IF( remember_batch .ne. fft_batchsize ) THEN
+
+       remember_batch = fft_batchsize
+
+       IF( ALLOCATED( tfft%map_z2y_wave ) )        DEALLOCATE( tfft%map_z2y_wave )
+       ALLOCATE( tfft%map_z2y_wave( tfft%my_nr3p * tfft%nr1w * fpar%kr2s * fft_batchsize, 2 ) )
+       CALL Make_z2y_Maps2( tfft, tfft%map_z2y_wave(:,1), fft_batchsize, tfft%ir1w, tfft%nsw, tfft%nr1w, tfft%small_chunks(1), tfft%big_chunks(1), tfft%zero_z2y_start(:,1), tfft%zero_z2y_end(:,1) ) 
+       IF( fft_residual .ne. 0 ) THEN
+          CALL Make_z2y_Maps2( tfft, tfft%map_z2y_wave(:,2), fft_residual, tfft%ir1w, tfft%nsw, tfft%nr1w, tfft%small_chunks(1), tfft%big_chunks(1) )
+       END IF
+
+       sendsize     = MAXVAL( tfft%nr3p ) * MAXVAL ( tfft%nsw ) * fft_batchsize
+       sendsize_rem = MAXVAL( tfft%nr3p ) * MAXVAL ( tfft%nsw ) * fft_residual
+       sendsize_pot = MAXVAL( tfft%nr3p ) * MAXVAL(  tfft%nsp )
+
+       !IF( parai%me .eq. 0 ) WRITE(6,'(A15,2X,I10,4X,A10,2X,I4,4X,A16,2X,I10)') "SINGLE SENDSIZE", sendsize/fft_batchsize, "BATCHSIZE", fft_batchsize, "BATCHED SENDSIZE", sendsize
+
+
+       arrayshape(1,1) = MAX( sendsize*parai%cp_nproc, sendsize_pot*parai%cp_nproc )
+       arrayshape(2,1) = fft_numbuff
+
+       IF( allocated( comm_send2 ) ) DEALLOCATE( comm_send2 )
+       IF( allocated( comm_recv2 ) ) DEALLOCATE( comm_recv2 )
+       ALLOCATE( comm_send2( arrayshape(1,1), arrayshape(2,1) ) )
+       ALLOCATE( comm_recv2( arrayshape(1,1), arrayshape(2,1) ) )
+
+       CALL Prep_fft_comm_preinitialized2( comm_send2, comm_recv2, sendsize, sendsize_rem, parai%nnode, parai%me, parai%my_node, parai%node_me, &
+                          parai%node_nproc, parai%max_node_nproc, parai%cp_overview, fft_numbuff, tfft%comm_sendrecv(:,1), tfft%do_comm(1), 1 )
+
+       CALL Prep_fft_comm_preinitialized2( comm_send2, comm_recv2, sendsize_pot, 0, parai%nnode, parai%me, parai%my_node, parai%node_me, &
+                          parai%node_nproc, parai%max_node_nproc, parai%cp_overview, 1, tfft%comm_sendrecv(:,2), tfft%do_comm(2), 2 )
+
+
+       IF( allocated( locks_cc_invfw ) ) DEALLOCATE( locks_cc_invfw )
+       ALLOCATE( locks_cc_invfw( ( nstate / fft_batchsize ) + 1, 4 ) )
+
+       IF( allocated( locks_omp ) ) DEALLOCATE( locks_omp )
+       ALLOCATE( locks_omp( parai%ncpus_FFT, fft_numbatches+3, 20 ) )
+
+       IF( allocated( locks_omp_big ) ) DEALLOCATE( locks_omp_big )
+       ALLOCATE( locks_omp_big( parai%ncpus_FFT, fft_batchsize, fft_numbatches+3, 20 ) )
+
+       CALL Make_Manual_Maps( tfft, fft_batchsize, fft_residual, tfft%nsw, tfft%nr1w, tfft%ngw, tfft%which, nstate )
+
+       first = .true.
+
+    END IF
+
+    IF( first .or. .not. allocated( spin ) ) THEN
+       IF( allocated( spin ) ) DEALLOCATE( spin )
+       ALLOCATE( spin( 2 ), STAT=ierr )
+       IF(ierr/=0) CALL stopgm(procedureN,'allocation problem', &
+            __LINE__,__FILE__)
+       first = .false.
+    END IF
+
+
+  END SUBROUTINE fft_new_gdist_batch_setup2
 
   SUBROUTINE Prep_fft_comm_preinitialized( comm_send, comm_recv, sendsize, sendsize_rem, nodes_numb, mype, my_node, my_node_rank, node_task_size, &
                            max_node_task_size, cp_overview, buffer_size, comm_sendrecv, do_comm, WAVE )
