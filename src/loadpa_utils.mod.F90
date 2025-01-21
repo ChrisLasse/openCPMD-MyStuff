@@ -59,11 +59,13 @@ CONTAINS
       j1, j2, jmax, jmin, k, kmax, kmin, mspace, nh1, nh2, nh3, nthreads,&
       first, last, offset
     INTEGER, ALLOCATABLE                     :: ihray(:,:), ixray(:,:), &
-                                                mgpa(:,:), ind(:), pre_inyh(:,:)
+                                                mgpa(:,:), ind(:), pre_inyh(:,:), &
+                                                cind(:), cpuind(:)
     INTEGER, ALLOCATABLE, DIMENSION(:)       :: thread_buff
     LOGICAL                                  :: oldstatus
     REAL(real_8)                             :: g2, sign, t
     REAL(real_8), PARAMETER                  :: eps8=1.0E-8_real_8
+    REAL(real_8), ALLOCATABLE                :: chg(:)
 
 ! ==--------------------------------------------------------------==
 ! ==  DISTRIBUTION OF PARALLEL WORK                               ==
@@ -209,6 +211,15 @@ CONTAINS
     ALLOCATE(hg(ncpw%nhg),STAT=ierr)
     IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
          __LINE__,__FILE__)
+    ALLOCATE(chg(spar%nhgs),STAT=ierr)
+    IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
+         __LINE__,__FILE__)
+    ALLOCATE(cpuind(spar%nhgs),STAT=ierr)
+    IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
+         __LINE__,__FILE__)
+    ALLOCATE(cind(spar%nhgs),STAT=ierr)
+    IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
+         __LINE__,__FILE__)
     ALLOCATE(pre_inyh(3,ncpw%nhg),STAT=ierr)
     IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
          __LINE__,__FILE__)
@@ -282,6 +293,8 @@ CONTAINS
                    pre_inyh(2,ncpw%nhg)=in2
                    pre_inyh(3,ncpw%nhg)=in3
                 ENDIF
+                chg(ig) = g2
+                cpuind(ig) = abs(icpu)
              ENDIF
           ENDDO
        ENDDO
@@ -352,9 +365,17 @@ CONTAINS
        inyh(:,i) = pre_inyh(:,ind(i))
     ENDDO
 
-    DO ig=1,ncpw%nhg
-       mapgp(ig)=ig
+
+    CALL hpsort_eps( SUM(parap%sparm(1,0:parai%nproc-1)), chg, cind, eps8 )
+
+    ip=0
+    DO i = 1, SUM(parap%sparm(1,0:parai%nproc-1))
+       IF( cpuind(cind(i)) .eq. parai%mepos+1 ) THEN
+          ip = ip + 1
+          mapgp(ip) = i
+       END IF
     ENDDO
+
     ! ==--------------------------------------------------------------==
     geq0=.FALSE.
     i0=0
@@ -499,6 +520,15 @@ CONTAINS
     IF(ierr/=0) CALL stopgm(procedureN,'deallocation problem',&
          __LINE__,__FILE__)
     DEALLOCATE(ihray,STAT=ierr)
+    IF(ierr/=0) CALL stopgm(procedureN,'deallocation problem',&
+         __LINE__,__FILE__)
+    DEALLOCATE(chg,STAT=ierr)
+    IF(ierr/=0) CALL stopgm(procedureN,'deallocation problem',&
+         __LINE__,__FILE__)
+    DEALLOCATE(cpuind,STAT=ierr)
+    IF(ierr/=0) CALL stopgm(procedureN,'deallocation problem',&
+         __LINE__,__FILE__)
+    DEALLOCATE(cind,STAT=ierr)
     IF(ierr/=0) CALL stopgm(procedureN,'deallocation problem',&
          __LINE__,__FILE__)
 

@@ -81,6 +81,7 @@ MODULE fftmain_utils
                                              mltfft_hp
   USE mp_interface,                    ONLY: mp_win_alloc_shared_mem
   USE parac,                           ONLY: parai
+  USE store_types,                     ONLY: restart1
   USE system,                          ONLY: cntl,&
                                              fpar
   USE thread_view_types,               ONLY: thread_view_t
@@ -1030,7 +1031,7 @@ CONTAINS
 
     tfft%which = 2
 
-    IF( first ) THEN
+    IF( first .and. .not. restart1%rwf ) THEN
 
        first = .false.
 
@@ -1054,6 +1055,12 @@ CONTAINS
        !$ locks_omp = .true.
        IF( .not. allocated( locks_omp_big ) ) ALLOCATE( locks_omp_big( parai%ncpus_FFT, 1, 1, 20 ) )
        !$ locks_omp_big = .true.
+
+    ELSE IF( first .and. restart1%rwf ) THEN
+
+       first = .false.
+
+       CALL Make_Manual_Maps( tfft, 1, 0, nss, nr1s, ngs, tfft%which, 0 )
 
     END IF
 
