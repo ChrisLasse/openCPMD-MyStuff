@@ -85,7 +85,7 @@ MODULE forces_driver
                                              zclean_k
   USE vpsi_utils,                      ONLY: vpsi,&
                                              vpsi_batchfft,&
-                                             vpsi_new_gdistribution_batchfft
+                                             vpsi_new_gdist_batchfft
 !!use rotate_utils, only : rotate_c
 !!use ovlap_utils, only : ovlap_c
   USE zeroing_utils,                   ONLY: zeroing
@@ -356,7 +356,7 @@ CONTAINS
 
     DO ik=1,nkpoint
        IF(batch_fft.AND..NOT.tkpts%tkpnt)THEN
-          CALL vpsi_new_gdistribution_batchfft(c0_ptr(:,:,ik),c2,crge%f(:,1),rhoe,psi(:,1),nstate,ik,&
+          CALL vpsi_new_gdist_batchfft(c0_ptr(:,:,ik),c2,crge%f(:,1),rhoe,psi(:,1),nstate,ik,&
                clsd%nlsd,redist_c2)
        ELSE
           CALL vpsi(c0_ptr(:,:,ik),c2,crge%f(:,1),rhoe,psi(:,1),nstate,ik,clsd%nlsd,&

@@ -80,8 +80,8 @@ MODULE fftutil_utils
   PUBLIC :: pack_y2x_n
   PUBLIC :: unpack_y2x_n
 !TK
-!CLR special routines for new gdistribution FFT
-  PUBLIC :: set_psi_new_gdistribution
+!CLR special routines for new gdist FFT
+  PUBLIC :: set_psi_new_gdist
   PUBLIC :: fft_comm_preinitialized
   PUBLIC :: invfft_z_section
   PUBLIC :: invfft_y_section
@@ -965,7 +965,7 @@ CONTAINS
   end subroutine zero_noomp
   !TK
   !CLR
-  SUBROUTINE set_psi_new_gdistribution( tfft, psi, aux, remswitch, mythread, last_single, counter )
+  SUBROUTINE set_psi_new_gdist( tfft, psi, aux, remswitch, mythread, last_single, counter )
     IMPLICIT NONE
 
     TYPE(FFT_TYPE_DESCRIPTOR), INTENT(INOUT) ::tfft
@@ -976,7 +976,7 @@ CONTAINS
 
     INTEGER :: j, i, iter, l, lter, f, fter
     INTEGER :: offset, offset2, offset3, offset4, offset5, offset6
-    CHARACTER(*), PARAMETER :: procedureN = 'set_psi_new_gdistribution'
+    CHARACTER(*), PARAMETER :: procedureN = 'set_psi_new_gdist'
 
     IF( .not. last_single ) THEN
 
@@ -1065,7 +1065,7 @@ CONTAINS
 
     END IF
 
-  END SUBROUTINE set_psi_new_gdistribution
+  END SUBROUTINE set_psi_new_gdist
 
   SUBROUTINE fft_comm_preinitialized( tfft, remswitch, work_buffer, which )
     IMPLICIT NONE

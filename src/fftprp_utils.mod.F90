@@ -311,8 +311,8 @@ CONTAINS
        nzhs(ig)=nzh(ig)
        indzs(ig)=indz(ig)
     ENDDO
-    ! Setup new gdistribution FFT Maps
-    CALL Prep_fft_new_gdistribution_Maps( tfft )
+    ! Setup new gdist FFT Maps
+    CALL Prep_fft_new_gdist_Maps( tfft )
     ! Some dimensions used for groups
     fpar%krx=1
     IF (group%nogrp.GT.1) THEN
@@ -762,15 +762,15 @@ CONTAINS
     ! ==--------------------------------------------------------------==
   END SUBROUTINE grpgs
   ! ==================================================================
-  SUBROUTINE Prep_fft_new_gdistribution_Maps( tfft )
+  SUBROUTINE Prep_fft_new_gdist_Maps( tfft )
     IMPLICIT NONE
 
     TYPE(FFT_TYPE_DESCRIPTOR), INTENT(INOUT) :: tfft
-    CHARACTER(*), PARAMETER :: procedureN = 'Prep_fft_new_gdistribution_Maps'
+    CHARACTER(*), PARAMETER :: procedureN = 'Prep_fft_new_gdist_Maps'
 
     INTEGER :: ierr
 
-    !set_psi_new_gdistribution
+    !set_psi_new_gdist
     ALLOCATE( tfft%map_set_psi( 6, tfft%nsw( parai%me+1 ) ), STAT=ierr )
     IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
        __LINE__,__FILE__)
@@ -1005,7 +1005,7 @@ CONTAINS
 
       END SUBROUTINE Make_y2z_Map
 
-  END SUBROUTINE Prep_fft_new_gdistribution_Maps
+  END SUBROUTINE Prep_fft_new_gdist_Maps
   ! ==================================================================
 
 END MODULE fftprp_utils

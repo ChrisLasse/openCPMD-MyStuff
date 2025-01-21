@@ -64,10 +64,10 @@ MODULE vpsi_utils
                                              invfftn,&
                                              fwfftn_batch,&
                                              invfftn_batch,&
-                                             invfft_new_gdistribution_batch,&
-                                             fwfft_new_gdistribution_batch
+                                             invfft_new_gdist_batch,&
+                                             fwfft_new_gdist_batch
   USE fftnew_utils,                    ONLY: setfftn,&
-                                             Pre_fft_new_gdistribution_setup,&
+                                             Pre_fft_new_gdist_setup,&
                                              comm_send,&
                                              comm_recv,&
                                              locks_calc_inv,&
@@ -80,7 +80,7 @@ MODULE vpsi_utils
                                              locks_calc_1,&
                                              locks_calc_2,&
                                              locks_omp_big
-  USE fftutil_utils,                   ONLY: set_psi_new_gdistribution
+  USE fftutil_utils,                   ONLY: set_psi_new_gdist
   USE geq0mod,                         ONLY: geq0
   USE kinds,                           ONLY: real_8,&
                                              int_8
@@ -159,7 +159,7 @@ MODULE vpsi_utils
   PUBLIC :: vpsi
   PUBLIC :: vpsi_batchfft
   PUBLIC :: vpsimt
-  PUBLIC :: vpsi_new_gdistribution_batchfft
+  PUBLIC :: vpsi_new_gdist_batchfft
   !public :: movepsid
 
 CONTAINS
@@ -1784,7 +1784,7 @@ CONTAINS
     !$omp end parallel
   END SUBROUTINE calc_c2
 
-  SUBROUTINE calc_c2_new_gdistribution( psi, c2, c0, f, mythread, batch_size, counter, njump, nostat, last )
+  SUBROUTINE calc_c2_new_gdist( psi, c2, c0, f, mythread, batch_size, counter, njump, nostat, last )
     IMPLICIT NONE
 
     INTEGER, INTENT(IN) :: batch_size, mythread, counter, njump, nostat
@@ -1797,7 +1797,7 @@ CONTAINS
     COMPLEX(real_8) :: fp, fm
     INTEGER :: j, ibatch, offset, is1, is2
     REAL(real_8) :: fi, fip1
-    CHARACTER(*), PARAMETER :: procedureN = 'calc_c2_new_gdistribution'
+    CHARACTER(*), PARAMETER :: procedureN = 'calc_c2_new_gdist'
 
   !------------------------------------------------------
   !-----------Calc_C2 Start------------------------------
@@ -1843,9 +1843,9 @@ CONTAINS
   !------------Calc_C2 End-------------------------------
   !------------------------------------------------------
 
-  END SUBROUTINE Calc_c2_new_gdistribution
+  END SUBROUTINE Calc_c2_new_gdist
 
-  SUBROUTINE mult_vpot_psi_new_gdistribution( f, v, spins, mythread )
+  SUBROUTINE mult_vpot_psi_new_gdist( f, v, spins, mythread )
     IMPLICIT NONE
 
     COMPLEX(real_8), INTENT(INOUT) :: f( tfft%my_nr3p * fpar%kr2s * fpar%kr1s )
@@ -1865,10 +1865,10 @@ CONTAINS
   !------------mult_vpot_psi End-------------------------
   !------------------------------------------------------
 
-  END SUBROUTINE mult_vpot_psi_new_gdistribution
+  END SUBROUTINE mult_vpot_psi_new_gdist
 
   ! ==================================================================
-  SUBROUTINE vpsi_new_gdistribution_batchfft(c0,c2,f,vpot,psi,nstate,ikind,ispin,redist_c2)
+  SUBROUTINE vpsi_new_gdist_batchfft(c0,c2,f,vpot,psi,nstate,ikind,ispin,redist_c2)
     ! ==================================================================
     ! == K-POINT AND NOT K-POINT VERSION OF VPSI.                     ==
     ! ==--------------------------------------------------------------==
@@ -1897,7 +1897,7 @@ CONTAINS
     INTEGER                                  :: nstate, ikind, ispin
     LOGICAL                                  :: redist_c2
     LOGICAL                                  :: lg_vpotx3a, lg_vpotx3b
-    CHARACTER(*), PARAMETER                  :: procedureN = 'vpsi_new_gdistribution_batchfft'
+    CHARACTER(*), PARAMETER                  :: procedureN = 'vpsi_new_gdist_batchfft'
     COMPLEX(real_8), PARAMETER               :: zone = (1.0_real_8,0.0_real_8)
 
     COMPLEX(real_8)                          :: fm, fp, psii, psin
@@ -2030,7 +2030,7 @@ CONTAINS
        i_start4 = 0
     END IF
 
-    CALL Pre_fft_new_gdistribution_setup( tfft, nstate_local, sendsize, sendsize_rem, lspin )
+    CALL Pre_fft_new_gdist_setup( tfft, nstate_local, sendsize, sendsize_rem, lspin )
 
     tfft%which_wave = 2
 
@@ -2119,7 +2119,7 @@ CONTAINS
                    counter(1) = counter(1) + 1
                    swap2=mod(ibatch,il_aux_array(2))+1
                    ! Loop over the electronic states of this batch
-                   CALL set_psi_new_gdistribution( tfft, c0( :, i_start3+1+(counter(1)-1)*fft_batchsize*2 : i_start3+bsize*2+(counter(1)-1)*fft_batchsize*2 ), aux_array(:,swap2), remswitch, mythread, last_single, counter(1) )
+                   CALL set_psi_new_gdist( tfft, c0( :, i_start3+1+(counter(1)-1)*fft_batchsize*2 : i_start3+bsize*2+(counter(1)-1)*fft_batchsize*2 ), aux_array(:,swap2), remswitch, mythread, last_single, counter(1) )
                    ! ==--------------------------------------------------------------==
                    ! ==  Fourier transform the wave functions to real space.         ==
                    ! ==  In the array PSI was used also the fact that the wave       ==
@@ -2135,7 +2135,7 @@ CONTAINS
                    ! ==  to swap                                                     ==
                    ! ==--------------------------------------------------------------==
                    swap=mod(ibatch,fft_numbuff)+1
-                   CALL invfft_new_gdistribution_batch( tfft, 1, bsize, 1, remswitch, mythread, counter(1), swap, f_inout1=aux_array(:,swap2:swap2), f_inout2=comm_send, f_inout3=comm_recv ) 
+                   CALL invfft_new_gdist_batch( tfft, 1, bsize, 1, remswitch, mythread, counter(1), swap, f_inout1=aux_array(:,swap2:swap2), f_inout2=comm_send, f_inout3=comm_recv ) 
                 END IF
              END IF
           END IF
@@ -2153,7 +2153,7 @@ CONTAINS
                 IF(bsize.NE.0)THEN
                    swap=mod(ibatch,fft_numbuff)+1
                    counter(2) = counter(2) + 1
-                   CALL invfft_new_gdistribution_batch( tfft, 2, bsize, 1, remswitch, mythread, counter(2), swap )
+                   CALL invfft_new_gdist_batch( tfft, 2, bsize, 1, remswitch, mythread, counter(2), swap )
                 END IF
              END IF
           END IF
@@ -2188,9 +2188,9 @@ CONTAINS
                       swap=mod(ibatch-start_loop1,fft_numbuff)+1
                       swap2=mod(ibatch-start_loop1,il_aux_array(2))+1
                       IF( ispec .eq. 1 ) counter(3) = counter(3) + 1
-                      CALL invfft_new_gdistribution_batch( tfft, 3, bsize, ispec, remswitch, mythread, counter(3), swap, &
+                      CALL invfft_new_gdist_batch( tfft, 3, bsize, ispec, remswitch, mythread, counter(3), swap, &
                                          f_inout1=comm_recv, f_inout2=aux_array(:,swap2:swap2) )
-                      CALL invfft_new_gdistribution_batch( tfft, 4, bsize, ispec, remswitch, mythread, counter(3), swap, &
+                      CALL invfft_new_gdist_batch( tfft, 4, bsize, ispec, remswitch, mythread, counter(3), swap, &
                                          f_inout1=aux_array(:,swap2:swap2), f_inout2=rs_wave(:,1:1) )
                    END IF
                 END IF
@@ -2235,7 +2235,7 @@ CONTAINS
                    !njump states per single fft
 
                    IF( ispec .eq. 1 ) counter(4) = counter(4) + 1
-                   CALL mult_vpot_psi_new_gdistribution( rs_wave(:,1), vpot, lspin(:), mythread )
+                   CALL mult_vpot_psi_new_gdist( rs_wave(:,1), vpot, lspin(:), mythread )
 
 !CLR: DK for what case this is needed; leaving it here
 !                   IF (td_prop%td_extpot.AND.cntl%tlsd.AND.ispin.EQ.2) THEN
@@ -2260,8 +2260,8 @@ CONTAINS
                 ! ==------------------------------------------------------------==
                 ! == Back transform to reciprocal space the product V.PSI       ==
                 ! ==------------------------------------------------------------==
-                    CALL fwfft_new_gdistribution_batch( tfft, 1, bsize, ispec, remswitch, mythread, counter(4), swap, f_inout1=rs_wave(:,1:1) )
-                    CALL fwfft_new_gdistribution_batch( tfft, 2, bsize, ispec, remswitch, mythread, counter(4), swap, &
+                    CALL fwfft_new_gdist_batch( tfft, 1, bsize, ispec, remswitch, mythread, counter(4), swap, f_inout1=rs_wave(:,1:1) )
+                    CALL fwfft_new_gdist_batch( tfft, 2, bsize, ispec, remswitch, mythread, counter(4), swap, &
                                       f_inout1=rs_wave(:,1:1), f_inout2=aux_array(:,swap2:swap2), f_inout3=comm_send, f_inout4=comm_recv )
 
                     i_start2=i_start2+njump
@@ -2293,7 +2293,7 @@ CONTAINS
              IF(bsize.NE.0)THEN
                 swap=mod(ibatch-start_loop1,fft_numbuff)+1
                 counter(5) = counter(5) + 1
-                CALL fwfft_new_gdistribution_batch( tfft, 3, bsize, 1, remswitch, mythread, counter(5), swap )
+                CALL fwfft_new_gdist_batch( tfft, 3, bsize, 1, remswitch, mythread, counter(5), swap )
              END IF
           END IF
        END IF
@@ -2323,8 +2323,8 @@ CONTAINS
                 swap=mod(ibatch-start_loop2,fft_numbuff)+1
                 swap2=mod(ibatch-start_loop2,il_aux_array(2))+1
                 counter(6) = counter(6) + 1
-                CALL fwfft_new_gdistribution_batch( tfft, 4, bsize, 1, remswitch, mythread, counter(6), swap, f_inout1=comm_recv, f_inout2=aux_array(:,swap2:swap2) )
-                CALL calc_c2_new_gdistribution( aux_array(:,swap2), c2(:, i_start3+1+(counter(6)-1)*fft_batchsize*2 : i_start3+bsize*2+(counter(6)-1)*fft_batchsize*2), &
+                CALL fwfft_new_gdist_batch( tfft, 4, bsize, 1, remswitch, mythread, counter(6), swap, f_inout1=comm_recv, f_inout2=aux_array(:,swap2:swap2) )
+                CALL calc_c2_new_gdist( aux_array(:,swap2), c2(:, i_start3+1+(counter(6)-1)*fft_batchsize*2 : i_start3+bsize*2+(counter(6)-1)*fft_batchsize*2), &
                                        c0(:, i_start3+1+(counter(6)-1)*fft_batchsize*2 : i_start3+bsize*2+(counter(6)-1)*fft_batchsize*2 ), &
                                        f, mythread, bsize, counter(6), njump, nostat, last_single )
              END IF
@@ -2447,7 +2447,7 @@ CONTAINS
 
     ! ==--------------------------------------------------------------==
     RETURN
-  END SUBROUTINE vpsi_new_gdistribution_batchfft
+  END SUBROUTINE vpsi_new_gdist_batchfft
   ! ==================================================================
 
 END MODULE vpsi_utils

@@ -66,9 +66,9 @@ MODULE rhoofr_utils
   USE fftmain_utils,                   ONLY: fwfftn,&
                                              invfftn,&
                                              invfftn_batch,&
-                                             invfft_new_gdistribution_batch
+                                             invfft_new_gdist_batch
   USE fftnew_utils,                    ONLY: setfftn,&
-                                             Pre_fft_new_gdistribution_setup,&
+                                             Pre_fft_new_gdist_setup,&
                                              comm_send,&
                                              comm_recv,&
                                              locks_calc_inv,&
@@ -79,7 +79,7 @@ MODULE rhoofr_utils
                                              locks_sing_1,&
                                              locks_calc_1,&
                                              locks_omp_big
-  USE fftutil_utils,                   ONLY: set_psi_new_gdistribution
+  USE fftutil_utils,                   ONLY: set_psi_new_gdist
   USE geq0mod,                         ONLY: geq0
   USE ions,                            ONLY: ions0,&
                                              ions1
@@ -160,7 +160,7 @@ MODULE rhoofr_utils
 
   PUBLIC :: rhoofr
   PUBLIC :: rhoofr_batchfft
-  PUBLIC :: rhoofr_new_gdistribution_batchfft
+  PUBLIC :: rhoofr_new_gdist_batchfft
   !public :: movepsih
 
 CONTAINS
@@ -1306,7 +1306,7 @@ CONTAINS
   END SUBROUTINE copy
 
   ! ==================================================================
-  SUBROUTINE rhoofr_new_gdistribution_batchfft(c0,rhoe,psi,nstate)
+  SUBROUTINE rhoofr_new_gdist_batchfft(c0,rhoe,psi,nstate)
     ! ==--------------------------------------------------------------==
     ! ==                        COMPUTES                              ==
     ! ==  THE NORMALIZED ELECTRON DENSITY RHOE IN REAL SPACE          ==
@@ -1334,7 +1334,7 @@ CONTAINS
     INTEGER                                  :: nstate
     COMPLEX(real_8), TARGET __CONTIGUOUS     :: psi(:)
 
-    CHARACTER(*), PARAMETER                  :: procedureN = 'rhoofr_new_gdistribution_batchfft'
+    CHARACTER(*), PARAMETER                  :: procedureN = 'rhoofr_new_gdist_batchfft'
     COMPLEX(real_8), PARAMETER               :: zone = (1.0_real_8,0.0_real_8)
     COMPLEX(real_8), POINTER __CONTIGUOUS &
                            , ASYNCHRONOUS    :: wfn_r1(:)
@@ -1430,7 +1430,7 @@ CONTAINS
     CALL part_1d_get_blk_bounds( nstate, parai%cp_inter_me, parai%cp_nogrp, fir, las )
     nstate_local = las - fir + 1
 
-    CALL Pre_fft_new_gdistribution_setup( tfft, nstate_local, sendsize, sendsize_rem, ispin )
+    CALL Pre_fft_new_gdist_setup( tfft, nstate_local, sendsize, sendsize_rem, ispin )
 
     IF( fft_numbuff .eq. 3 ) THEN
        fft_numbuff = 2
@@ -1527,7 +1527,7 @@ CONTAINS
                 counter(1) = counter(1) + 1
                 swap2=mod(ibatch,aux_dimension)+1
                 ! Loop over the electronic states of this batch
-                CALL set_psi_new_gdistribution( tfft, c0( :, i_start3+1+(counter(1)-1)*fft_batchsize*2 : i_start3+bsize*2+(counter(1)-1)*fft_batchsize*2 ), aux_array(:,swap2), remswitch, mythread, last_single, counter(1) )
+                CALL set_psi_new_gdist( tfft, c0( :, i_start3+1+(counter(1)-1)*fft_batchsize*2 : i_start3+bsize*2+(counter(1)-1)*fft_batchsize*2 ), aux_array(:,swap2), remswitch, mythread, last_single, counter(1) )
 !                ! ==--------------------------------------------------------------==
 !                ! ==  Fourier transform the wave functions to real space.         ==
 !                ! ==  In the array PSI was used also the fact that the wave       ==
@@ -1543,7 +1543,7 @@ CONTAINS
 !                ! ==  to swap                                                     ==
 !                ! ==--------------------------------------------------------------==
                 swap=mod(ibatch,fft_numbuff)+1
-                CALL invfft_new_gdistribution_batch( tfft, 1, bsize, 1, remswitch, mythread, counter(1), swap, f_inout1=aux_array(:,swap2:swap2), f_inout2=comm_send, f_inout3=comm_recv ) 
+                CALL invfft_new_gdist_batch( tfft, 1, bsize, 1, remswitch, mythread, counter(1), swap, f_inout1=aux_array(:,swap2:swap2), f_inout2=comm_send, f_inout3=comm_recv ) 
              END IF
           END IF
        END IF
@@ -1561,7 +1561,7 @@ CONTAINS
              IF(bsize.NE.0)THEN
                 swap=mod(ibatch,fft_numbuff)+1
                 counter(2) = counter(2) + 1
-                CALL invfft_new_gdistribution_batch( tfft, 2, bsize, 1, remswitch, mythread, counter(2), swap )
+                CALL invfft_new_gdist_batch( tfft, 2, bsize, 1, remswitch, mythread, counter(2), swap )
              END IF
           END IF
        END IF
@@ -1593,9 +1593,9 @@ CONTAINS
                    swap2=mod(ibatch-start_loop,aux_dimension)+1
                    IF( ispec .eq. 1 ) counter(3) = counter(3) + 1
                    start = (ispec+((counter(3)-1)*fft_batchsize))
-                   CALL invfft_new_gdistribution_batch( tfft, 3, bsize, ispec, remswitch, mythread, counter(3), swap, &
+                   CALL invfft_new_gdist_batch( tfft, 3, bsize, ispec, remswitch, mythread, counter(3), swap, &
                                       f_inout1=comm_recv, f_inout2=aux_array( : , swap2 : swap2 ) )
-                   CALL invfft_new_gdistribution_batch( tfft, 4, bsize, ispec, remswitch, mythread, counter(3), swap, &
+                   CALL invfft_new_gdist_batch( tfft, 4, bsize, ispec, remswitch, mythread, counter(3), swap, &
                                       f_inout1=aux_array( : , swap2 : swap2 ), f_inout2=psi_work(:,start:start) )
                    ! Compute the charge density from the wave functions
                    ! in real space
@@ -1810,6 +1810,6 @@ CONTAINS
     END IF
     ! ==--------------------------------------------------------------==
     RETURN
-  END SUBROUTINE rhoofr_new_gdistribution_batchfft
+  END SUBROUTINE rhoofr_new_gdist_batchfft
 
 END MODULE rhoofr_utils

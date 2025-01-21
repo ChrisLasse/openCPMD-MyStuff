@@ -24,7 +24,7 @@ MODULE rscpot_utils
   USE rhoofr_c_utils,                  ONLY: rhoofr_c
   USE rhoofr_utils,                    ONLY: rhoofr,&
                                              rhoofr_batchfft,&
-                                             rhoofr_new_gdistribution_batchfft
+                                             rhoofr_new_gdist_batchfft
   USE rnlfor_utils,                    ONLY: rnlfor
   USE rnlrh_utils,                     ONLY: rnlrh
   USE ropt,                            ONLY: iteropt
@@ -117,7 +117,7 @@ CONTAINS
             .OR.(lqmmm%qmmm .AND. iqmmm%coupl_model.EQ.0)
        IF (dorho) THEN
           IF(batch_fft)THEN
-             CALL rhoofr_new_gdistribution_batchfft(c0,rhoe,psi(:,1),nstate)
+             CALL rhoofr_new_gdist_batchfft(c0,rhoe,psi(:,1),nstate)
           ELSE
              CALL rhoofr(c0,rhoe,psi(:,1),nstate)
           END IF

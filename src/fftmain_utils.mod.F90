@@ -108,8 +108,8 @@ MODULE fftmain_utils
   PUBLIC :: invfftn_batch
   PUBLIC :: fwfftn_batch
 
-  PUBLIC :: invfft_new_gdistribution_batch
-  PUBLIC :: fwfft_new_gdistribution_batch
+  PUBLIC :: invfft_new_gdist_batch
+  PUBLIC :: fwfft_new_gdist_batch
 
 
 CONTAINS
@@ -657,7 +657,7 @@ CONTAINS
        CALL fftnew_cuda(isign,f,sparse, comm, thread_view=thread_view, &
             & copy_data_to_device=copy_data_to_device, copy_data_to_host=copy_data_to_host )
     ELSE
-       CALL fft_new_gdistribution( isign, tfft, f, tfft%nhg, tfft%nr1p, tfft%ir1p, tfft%nsp )
+       CALL fft_new_gdist( isign, tfft, f, tfft%nhg, tfft%nr1p, tfft%ir1p, tfft%nsp )
     ENDIF
     CALL tihalt(procedureN,isub)
     ! ==--------------------------------------------------------------==
@@ -696,7 +696,7 @@ CONTAINS
        CALL fftnew_cuda(isign,f,sparse, comm, thread_view=thread_view, &
             & copy_data_to_device=copy_data_to_device, copy_data_to_host=copy_data_to_host )
     ELSE
-       CALL fft_new_gdistribution( isign, tfft, f, tfft%nhg, tfft%nr1p, tfft%ir1p, tfft%nsp )
+       CALL fft_new_gdist( isign, tfft, f, tfft%nhg, tfft%nr1p, tfft%ir1p, tfft%nsp )
     ENDIF
     CALL tihalt(procedureN,isub)
     ! ==--------------------------------------------------------------==
@@ -757,7 +757,7 @@ CONTAINS
     ! ==--------------------------------------------------------------==
   END SUBROUTINE invfftn_batch
 
-  SUBROUTINE invfft_new_gdistribution_batch( tfft, step, batch_size, ispec, remswitch, mythread, counter, work_buffer, f_inout1, f_inout2, f_inout3, f_inout4 )
+  SUBROUTINE invfft_new_gdist_batch( tfft, step, batch_size, ispec, remswitch, mythread, counter, work_buffer, f_inout1, f_inout2, f_inout3, f_inout4 )
     IMPLICIT NONE
 
     TYPE(FFT_TYPE_DESCRIPTOR), INTENT(INOUT) :: tfft
@@ -767,7 +767,7 @@ CONTAINS
     COMPLEX(real_8), OPTIONAL, INTENT(INOUT) :: f_inout3(:,:)
     COMPLEX(real_8), OPTIONAL, INTENT(INOUT) :: f_inout4(:,:)
 
-    CHARACTER(*), PARAMETER :: procedureN = 'invfft_new_gdistribution_batch'
+    CHARACTER(*), PARAMETER :: procedureN = 'invfft_new_gdist_batch'
 
     INTEGER :: isub, isub4
 
@@ -779,15 +779,15 @@ CONTAINS
     END IF
 
     IF( step .eq. 1 ) THEN
-       CALL fft_new_gdistribution_batch( tfft, -1, step, batch_size, ispec, remswitch, mythread, counter, work_buffer, &
+       CALL fft_new_gdist_batch( tfft, -1, step, batch_size, ispec, remswitch, mythread, counter, work_buffer, &
                                 f_inout1=f_inout1, f_inout2=f_inout2, f_inout3=f_inout3, f_inout4=f_inout4 )
     ELSE IF( step .eq. 2 ) THEN
-       CALL fft_new_gdistribution_batch( tfft, -1, step, batch_size, ispec, remswitch, mythread, counter, work_buffer )
+       CALL fft_new_gdist_batch( tfft, -1, step, batch_size, ispec, remswitch, mythread, counter, work_buffer )
     ELSE IF( step .eq. 3 ) THEN
-       CALL fft_new_gdistribution_batch( tfft, -1, step, batch_size, ispec, remswitch, mythread, counter, work_buffer, &
+       CALL fft_new_gdist_batch( tfft, -1, step, batch_size, ispec, remswitch, mythread, counter, work_buffer, &
                                 f_inout1=f_inout1, f_inout2=f_inout2, f_inout3=f_inout3, f_inout4=f_inout4 )
     ELSE IF( step .eq. 4 ) THEN
-       CALL fft_new_gdistribution_batch( tfft, -1, step, batch_size, ispec, remswitch, mythread, counter, work_buffer, &
+       CALL fft_new_gdist_batch( tfft, -1, step, batch_size, ispec, remswitch, mythread, counter, work_buffer, &
                                 f_inout1=f_inout1, f_inout2=f_inout2, f_inout3=f_inout3, f_inout4=f_inout4 )
     END IF
 
@@ -798,9 +798,9 @@ CONTAINS
        CALL tihalt(procedureN,isub)
     END IF
 
-  END SUBROUTINE invfft_new_gdistribution_batch
+  END SUBROUTINE invfft_new_gdist_batch
 
-  SUBROUTINE fwfft_new_gdistribution_batch( tfft, step, batch_size, ispec, remswitch, mythread, counter, work_buffer, f_inout1, f_inout2, f_inout3, f_inout4 )
+  SUBROUTINE fwfft_new_gdist_batch( tfft, step, batch_size, ispec, remswitch, mythread, counter, work_buffer, f_inout1, f_inout2, f_inout3, f_inout4 )
     IMPLICIT NONE
 
     TYPE(FFT_TYPE_DESCRIPTOR), INTENT(INOUT) :: tfft
@@ -810,7 +810,7 @@ CONTAINS
     COMPLEX(real_8), OPTIONAL, INTENT(INOUT) :: f_inout3(:,:)
     COMPLEX(real_8), OPTIONAL, INTENT(INOUT) :: f_inout4(:,:)
 
-    CHARACTER(*), PARAMETER :: procedureN = 'fwfft_new_gdistribution_batch'
+    CHARACTER(*), PARAMETER :: procedureN = 'fwfft_new_gdist_batch'
 
     INTEGER :: isub, isub4
 
@@ -822,15 +822,15 @@ CONTAINS
     END IF
 
     IF( step .eq. 1 ) THEN
-       CALL fft_new_gdistribution_batch( tfft, 1, step, batch_size, ispec, remswitch, mythread, counter, work_buffer, &
+       CALL fft_new_gdist_batch( tfft, 1, step, batch_size, ispec, remswitch, mythread, counter, work_buffer, &
                                 f_inout1=f_inout1, f_inout2=f_inout2, f_inout3=f_inout3, f_inout4=f_inout4 )
     ELSE IF( step .eq. 2 ) THEN
-       CALL fft_new_gdistribution_batch( tfft, 1, step, batch_size, ispec, remswitch, mythread, counter, work_buffer, &
+       CALL fft_new_gdist_batch( tfft, 1, step, batch_size, ispec, remswitch, mythread, counter, work_buffer, &
                                 f_inout1=f_inout1, f_inout2=f_inout2, f_inout3=f_inout3, f_inout4=f_inout4 )
     ELSE IF( step .eq. 3 ) THEN
-       CALL fft_new_gdistribution_batch( tfft, 1, step, batch_size, ispec, remswitch, mythread, counter, work_buffer )
+       CALL fft_new_gdist_batch( tfft, 1, step, batch_size, ispec, remswitch, mythread, counter, work_buffer )
     ELSE IF( step .eq. 4 ) THEN
-       CALL fft_new_gdistribution_batch( tfft, 1, step, batch_size, ispec, remswitch, mythread, counter, work_buffer, &
+       CALL fft_new_gdist_batch( tfft, 1, step, batch_size, ispec, remswitch, mythread, counter, work_buffer, &
                                 f_inout1=f_inout1, f_inout2=f_inout2, f_inout3=f_inout3, f_inout4=f_inout4 )
     END IF
 
@@ -841,9 +841,9 @@ CONTAINS
        CALL tihalt(procedureN,isub)
     END IF
 
-  END SUBROUTINE fwfft_new_gdistribution_batch
+  END SUBROUTINE fwfft_new_gdist_batch
 
-  SUBROUTINE fft_new_gdistribution_batch( tfft, isign, step, batch_size, ispec, remswitch, mythread, counter, work_buffer, f_inout1, f_inout2, f_inout3, f_inout4 )
+  SUBROUTINE fft_new_gdist_batch( tfft, isign, step, batch_size, ispec, remswitch, mythread, counter, work_buffer, f_inout1, f_inout2, f_inout3, f_inout4 )
     IMPLICIT NONE
 
     TYPE(FFT_TYPE_DESCRIPTOR), INTENT(INOUT) ::tfft
@@ -854,7 +854,7 @@ CONTAINS
     COMPLEX(real_8), OPTIONAL, INTENT(INOUT) :: f_inout3(:,:)
     COMPLEX(real_8), OPTIONAL, INTENT(INOUT) :: f_inout4(:,:)
 
-    CHARACTER(*), PARAMETER :: procedureN = 'fft_new_gdistribution_batch'
+    CHARACTER(*), PARAMETER :: procedureN = 'fft_new_gdist_batch'
 
     INTEGER :: current, isub, isub4, ierr
 
@@ -988,9 +988,9 @@ CONTAINS
        IF( parai%ncpus_FFT .eq. 1 .or. mythread .eq. 1 ) CALL tihalt(procedureN,isub)
     END IF
 
-  END SUBROUTINE fft_new_gdistribution_batch
+  END SUBROUTINE fft_new_gdist_batch
 
-  SUBROUTINE fft_new_gdistribution( isign, tfft, f, ngs, nr1s, ir1s, nss )
+  SUBROUTINE fft_new_gdist( isign, tfft, f, ngs, nr1s, ir1s, nss )
 
     IMPLICIT NONE
 
@@ -1007,7 +1007,7 @@ CONTAINS
 
     INTEGER(int_8) :: il_aux(2)
     INTEGER :: i, ierr, isub, mythread
-    CHARACTER(*), PARAMETER                  :: procedureN = 'fft_new_gdistribution'
+    CHARACTER(*), PARAMETER                  :: procedureN = 'fft_new_gdist'
     LOGICAL, SAVE :: first = .true.
     INTEGER, SAVE :: sendsize
     TYPE(C_PTR) :: baseptr( 0:parai%node_nproc-1 )
@@ -1121,6 +1121,6 @@ CONTAINS
 
     CALL tihalt(procedureN,isub)
 
-  END SUBROUTINE fft_new_gdistribution
+  END SUBROUTINE fft_new_gdist
 
 END MODULE fftmain_utils

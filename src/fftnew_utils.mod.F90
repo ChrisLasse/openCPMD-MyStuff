@@ -54,7 +54,7 @@ MODULE fftnew_utils
   !public :: rmfftnset
   PUBLIC :: addfftnset
   !public :: setrays
-  PUBLIC :: Pre_fft_new_gdistribution_setup
+  PUBLIC :: Pre_fft_new_gdist_setup
   PUBLIC :: Prep_fft_comm_preinitialized
   PUBLIC :: Make_Manual_Maps
   PUBLIC :: Make_z2y_Maps
@@ -661,7 +661,7 @@ CONTAINS
     ! ==--------------------------------------------------------------==
   END SUBROUTINE setrays
   ! ==================================================================
-  SUBROUTINE Pre_fft_new_gdistribution_setup( tfft, nstate, sendsize, sendsize_rem, spin )
+  SUBROUTINE Pre_fft_new_gdist_setup( tfft, nstate, sendsize, sendsize_rem, spin )
     IMPLICIT NONE
 
     TYPE(FFT_TYPE_DESCRIPTOR), INTENT(INOUT) :: tfft
@@ -674,7 +674,7 @@ CONTAINS
     LOGICAL, SAVE :: first, DEBUG_shared_mem = .false.
     TYPE(C_PTR) :: baseptr( 0:parai%node_nproc-1 )
     INTEGER :: arrayshape(3,4), needed_size(4)
-    CHARACTER(*), PARAMETER                  :: procedureN = 'Pre_fft_new_gdistribution_setup'
+    CHARACTER(*), PARAMETER                  :: procedureN = 'Pre_fft_new_gdist_setup'
     COMPLEX(real_8), SAVE, POINTER, CONTIGUOUS   :: Big_Com_Pointer(:,:,:)
     LOGICAL,         SAVE, POINTER, CONTIGUOUS   :: Big_1Log_Pointer(:,:,:)
     LOGICAL,         SAVE, POINTER, CONTIGUOUS   :: Big_2Log_Pointer(:,:,:)
@@ -925,7 +925,7 @@ CONTAINS
     END IF
 
 
-  END SUBROUTINE Pre_fft_new_gdistribution_setup
+  END SUBROUTINE Pre_fft_new_gdist_setup
 
   SUBROUTINE Prep_fft_comm_preinitialized( comm_send, comm_recv, sendsize, sendsize_rem, nodes_numb, mype, my_node, my_node_rank, node_task_size, &
                            max_node_task_size, cp_overview, buffer_size, comm_sendrecv, do_comm, WAVE )
