@@ -229,6 +229,7 @@ CONTAINS
           !get data from other cp_grp other threads build local beta and perform dgemms
           CALL my_concat_inplace(dai,INT(il_dai(1),kind=int_4)*nstate,parai%cp_inter_grp)
        END IF
+!$OMP BARRIER
        IF(methread.EQ.1.OR.nthreads.EQ.1)THEN
           !$ methread = omp_get_thread_num()
           !$ IF(methread.EQ.1)THEN

@@ -80,6 +80,8 @@ CONTAINS
                                                 isub3, NGW_local
     LOGICAL                                  :: GEQ0_local, symmetric,rdst,need_full
 
+    a = 0.0d0
+
     IF( PRESENT (redist) ) THEN
        rdst = redist
     ELSE

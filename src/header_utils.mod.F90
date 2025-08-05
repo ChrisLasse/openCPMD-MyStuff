@@ -78,7 +78,7 @@ CONTAINS
        WRITE(6,'(12X,A)') '_  /    __  /_/ /_  /|_/ /__  / / / '
        WRITE(6,'(12X,A)') '/ /___  _  ____/_  /  / / _  /_/ /  '
        WRITE(6,'(12X,A)') '\____/  /_/     /_/  /_/  /_____/   '
-       WRITE(6,'(/,23X,A,A,/)') '   VERSION ', __GIT_REV
+!       WRITE(6,'(/,23X,A,A,/)') '   VERSION ', __GIT_REV
 #if defined(__GROMOS)
        WRITE(6,'(/,16X,A,/)') 'COMPILED WITH GROMOS-AMBER QM/MM SUPPORT'
 #endif
