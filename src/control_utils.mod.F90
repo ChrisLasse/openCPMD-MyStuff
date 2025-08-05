@@ -3775,6 +3775,14 @@ CONTAINS
                    something_went_wrong = .true.
                    go_on_reading        = .false.
                 ENDIF
+             ELSEIF ( keyword_contains(line,'SET_C2_STRAT') ) THEN
+                READ(iunit,'(A)',iostat=ierr) line
+                CALL readsi(line,1,last,cnti%C2_strat,erread)
+                IF (erread) THEN
+                   error_message        = "ERROR WHILE READING VALUE"
+                   something_went_wrong = .true.
+                   go_on_reading        = .false.
+                ENDIF
              ELSEIF ( keyword_contains(line,'RNLSM1_BLOCKCOUNT') ) THEN
                 READ(iunit,'(A)',iostat=ierr) line
                 CALL readsi(line,1,last,cnti%rnlsm1_bc,erread)

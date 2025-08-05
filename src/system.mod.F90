@@ -704,6 +704,7 @@ MODULE system
      INTEGER :: elpa_num_proc = HUGE(0)
      INTEGER :: fft_tune_it_per_batch = HUGE(0)
      INTEGER :: fft_prescribed_batchsize = HUGE(0)
+     INTEGER :: C2_strat = HUGE(0)
   END TYPE cnti_t
   TYPE(cnti_t), SAVE, PUBLIC :: cnti
   ! ==================================================================

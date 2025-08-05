@@ -477,7 +477,7 @@ CONTAINS
        !if autotuning is requested, we use this batchsize to set fft_max_numbatches
        a2a_msgsize=a2a_msgsize*1024/(parai%nproc*16)
        fft_batchsize=FLOOR(REAL(a2a_msgsize,KIND=real_8)/REAL(lda,KIND=real_8))
-       IF( parai%nnode .eq. 1 ) fft_batchsize = 1
+       IF( parai%nnode .eq. 1 .and. parai%cp_nogrp .eq. 1 ) fft_batchsize = 1
        IF( cntl%fft_prescribe_batchsize ) fft_batchsize = cnti%fft_prescribed_batchsize
        IF (paral%io_parent)&
             WRITE(6,'(A46,I3)')&

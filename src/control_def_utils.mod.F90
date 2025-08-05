@@ -700,6 +700,8 @@ CONTAINS
     cntl%use_elpa=.FALSE.
     cnti%elpa_num_proc=-1
     cntl%use_elpa_autotune=.FALSE.
+    !CR which C2 communication scheme to use
+    cnti%C2_strat=1
     RETURN
   END SUBROUTINE control_def
   ! ==================================================================

@@ -152,7 +152,6 @@ MODULE fft
      INTEGER :: npst
      INTEGER :: max_ngw
      INTEGER :: max_nstates
-     INTEGER :: com_count
 
      INTEGER :: which ! 1 -> wave sticks ; 2 -> pot sticks
      INTEGER :: which_wave ! 1 -> rho ; -> 2 -> vpsi
@@ -165,6 +164,7 @@ MODULE fft
      INTEGER :: comm_sendrecv(2,2)
      INTEGER, ALLOCATABLE :: c2_com_num(:,:)
      INTEGER, ALLOCATABLE :: c2_com_recv(:,:)
+     INTEGER, ALLOCATABLE :: s4_coms(:)
 
   END TYPE
   Type( FFT_TYPE_DESCRIPTOR ) :: tfft
