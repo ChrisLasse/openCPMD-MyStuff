@@ -658,7 +658,11 @@ CONTAINS
        CALL fftnew_cuda(isign,f,sparse, comm, thread_view=thread_view, &
             & copy_data_to_device=copy_data_to_device, copy_data_to_host=copy_data_to_host )
     ELSE
-       CALL fft_new_gdist( isign, tfft, f, tfft%nhg, tfft%nr1p, tfft%ir1p, tfft%nsp )
+       IF( cntl%new_gdist ) THEN
+          CALL fft_new_gdist( isign, tfft, f, tfft%nhg, tfft%nr1p, tfft%ir1p, tfft%nsp )
+       ELSE
+          CALL fftnew(isign,f,sparse, parai%allgrp )
+       END IF
     ENDIF
     CALL tihalt(procedureN,isub)
     ! ==--------------------------------------------------------------==
@@ -697,7 +701,11 @@ CONTAINS
        CALL fftnew_cuda(isign,f,sparse, comm, thread_view=thread_view, &
             & copy_data_to_device=copy_data_to_device, copy_data_to_host=copy_data_to_host )
     ELSE
-       CALL fft_new_gdist( isign, tfft, f, tfft%nhg, tfft%nr1p, tfft%ir1p, tfft%nsp )
+       IF( cntl%new_gdist ) THEN
+          CALL fft_new_gdist( isign, tfft, f, tfft%nhg, tfft%nr1p, tfft%ir1p, tfft%nsp )
+       ELSE
+          CALL fftnew(isign,f,sparse, parai%allgrp )
+       END IF
     ENDIF
     CALL tihalt(procedureN,isub)
     ! ==--------------------------------------------------------------==
@@ -1015,7 +1023,7 @@ CONTAINS
     INTEGER :: arrayshape(3)
     COMPLEX(real_8), SAVE, POINTER, CONTIGUOUS   :: Big_Pointer(:,:,:)
 
-    CALL tiset(procedureN,isub)
+!    CALL tiset(procedureN,isub)
 
     il_aux(1) = fpar%kr2s * nr1s * tfft%my_nr3p
     il_aux(2) = 1
@@ -1126,7 +1134,7 @@ CONTAINS
 
     tfft%which = 1
 
-    CALL tihalt(procedureN,isub)
+!    CALL tihalt(procedureN,isub)
 
   END SUBROUTINE fft_new_gdist
 

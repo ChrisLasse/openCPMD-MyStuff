@@ -23,7 +23,8 @@ MODULE rggen_utils
   USE kinds,                           ONLY: real_8
   USE latgen_utils,                    ONLY: latgen
   USE loadpa_utils,                    ONLY: leadim,&
-                                             loadpa
+                                             loadpa,&
+                                             loadpa_new_gdist
   USE metr,                            ONLY: metr_com
   USE mp_interface,                    ONLY: mp_bcast, mp_sum,&
                                              mp_get_node_env,&
@@ -108,7 +109,11 @@ CONTAINS
     ! Generate Taskgroups
     ! vw      CALL GROUPS
     ! Distribution of Work and Information to all Nodes
-    CALL loadpa
+    IF( cntl%new_gdist ) THEN
+       CALL loadpa_new_gdist
+    ELSE
+       CALL loadpa
+    END IF
     CALL aliasing
 #if defined(__VECTOR)
     !$omp parallel do private(IG,I,J,K,T1,T2,T3)

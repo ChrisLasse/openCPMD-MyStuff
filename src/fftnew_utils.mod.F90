@@ -45,7 +45,7 @@ MODULE fftnew_utils
   USE utils,                           ONLY: icopy
   USE zeroing_utils,                   ONLY: zeroing
 
-  USE iso_c_binding
+  USE, INTRINSIC :: iso_c_binding
 
   IMPLICIT NONE
 

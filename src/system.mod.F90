@@ -584,6 +584,8 @@ MODULE system
      LOGICAL :: rnlsm_autotune
      LOGICAL :: fft_tune_batchsize
      LOGICAL :: fft_prescribe_batchsize = .FALSE.
+     LOGICAL :: old_cp_ordering = .FALSE.
+     LOGICAL :: new_gdist = .TRUE.
   END TYPE cntl_t
   TYPE(cntl_t), SAVE, PUBLIC :: cntl
   ! ==================================================================

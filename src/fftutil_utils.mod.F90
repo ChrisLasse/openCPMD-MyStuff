@@ -57,7 +57,7 @@ MODULE fftutil_utils
                                              zsctr_no_omp
   USE zeroing_utils,                   ONLY: zeroing
 
-  USE iso_fortran_env
+  USE, INTRINSIC :: iso_fortran_env
 
   IMPLICIT NONE
 
@@ -80,7 +80,7 @@ MODULE fftutil_utils
   PUBLIC :: pack_y2x_n
   PUBLIC :: unpack_y2x_n
 !TK
-!CLR special routines for new gdist FFT
+!CLR special routines for new_gdist FFT
   PUBLIC :: set_psi_new_gdist
   PUBLIC :: fft_comm_preinitialized
   PUBLIC :: invfft_z_section
@@ -1073,15 +1073,15 @@ CONTAINS
     INTEGER, INTENT(IN)                         :: remswitch, work_buffer, which
     TYPE(FFT_TYPE_DESCRIPTOR), INTENT(INOUT)    :: tfft
 
-    CHARACTER(*), PARAMETER :: procedureN = 'fft_com'
+    CHARACTER(*), PARAMETER :: procedureN = 'fft_com_preinit'
 
     INTEGER :: ierr, isub, isub4
 
-    IF( cntl%fft_tune_batchsize ) THEN
-       CALL tiset(procedureN//'_tuning',isub4)
-    ELSE
-       CALL tiset(procedureN,isub)
-    END IF
+!    IF( cntl%fft_tune_batchsize ) THEN
+!       CALL tiset(procedureN//'_tuning',isub4)
+!    ELSE
+!       CALL tiset(procedureN,isub)
+!    END IF
 
     !CALL mpi_win_lock_all( MPI_MODE_NOCHECK, tfft%mpi_window( 1 ), ierr )
     !CALL mpi_win_lock_all( MPI_MODE_NOCHECK, tfft%mpi_window( 2 ), ierr )
@@ -1093,11 +1093,11 @@ CONTAINS
     !CALL mpi_win_unlock_all( tfft%mpi_window( 2 ), ierr )
     !CALL mpi_win_unlock_all( tfft%mpi_window( 1 ), ierr )
 
-    IF( cntl%fft_tune_batchsize ) THEN
-       CALL tihalt(procedureN//'_tuning',isub4)
-    ELSE
-       CALL tihalt(procedureN,isub)
-    END IF
+!    IF( cntl%fft_tune_batchsize ) THEN
+!       CALL tihalt(procedureN//'_tuning',isub4)
+!    ELSE
+!       CALL tihalt(procedureN,isub)
+!    END IF
 
   END SUBROUTINE fft_comm_preinitialized
 

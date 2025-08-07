@@ -28,7 +28,8 @@ MODULE mp_interface
   USE scratch_interface,               ONLY: request_scratch,&
                                              free_scratch
 #endif
-  USE system,                          ONLY: cnti
+  USE system,                          ONLY: cntl,&
+                                             cnti
   USE zeroing_utils,                   ONLY: zeroing
 
 #ifdef __PARALLEL
@@ -711,8 +712,13 @@ CONTAINS
     s_col(1)=.FALSE.
     s_row(1)=.TRUE.
     s_row(2)=.FALSE.
-    np(1)=nogrp
-    np(2)=npgrp
+    IF( cntl%old_cp_ordering ) THEN
+       np(1)=npgrp
+       np(2)=nogrp
+    ELSE
+       np(1)=nogrp
+       np(2)=npgrp
+    END IF
 
     ! if needed: get the 2d grid
     CALL mpi_comm_size ( comm, nnodes, ierr )
@@ -727,9 +733,17 @@ CONTAINS
     CALL mpi_cart_create(comm,2,np,period,order,&
          CART_GRP,IERR)
     CALL mp_mpi_error_assert(ierr,procedureN,__LINE__,__FILE__)
-    CALL mpi_cart_sub(cart_grp,s_col,mepgrp,ierr)
+    IF( cntl%old_cp_ordering ) THEN
+       CALL mpi_cart_sub(cart_grp,s_row,mepgrp,ierr)
+    ELSE
+       CALL mpi_cart_sub(cart_grp,s_col,mepgrp,ierr)
+    END IF
     CALL mp_mpi_error_assert(ierr,procedureN,__LINE__,__FILE__)
-    CALL mpi_cart_sub(cart_grp,s_row,meogrp,ierr)
+    IF( cntl%old_cp_ordering ) THEN
+       CALL mpi_cart_sub(cart_grp,s_col,meogrp,ierr)
+    ELSE
+       CALL mpi_cart_sub(cart_grp,s_row,meogrp,ierr)
+    END IF
     CALL mp_mpi_error_assert(ierr,procedureN,__LINE__,__FILE__)
     CALL mpi_comm_group(comm,world,ierr)
     CALL mp_mpi_error_assert(ierr,procedureN,__LINE__,__FILE__)

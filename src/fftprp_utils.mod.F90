@@ -131,6 +131,7 @@ CONTAINS
     INTEGER :: i, ierr, ig, ij, img, iny1, iny2, iny3, ip, ipp, ixf, j, jj, &
       jmg, ldim, len, mxrp, nclu, ngray, nh1, nh2, nh3, nhray, nl1, nl2, nn2, &
       nr3i, nrx, nstate, ny1, ny2, ny3, first, last, lda, it, count, ifa, jfa
+    INTEGER                                  :: dime(2)
     INTEGER, ALLOCATABLE                     :: my(:)
     REAL(real_8)                             :: rmem, rstate, xmpenm
 
@@ -150,12 +151,22 @@ CONTAINS
     CALL zeroing(mg)!,kr2s*kr3s)
     CALL zeroing(mz)!,2*spar%nr3s)
     CALL zeroing(my)!,2*spar%nr2s)
+
+    !CLR switch from X-Planes to Z-Planes if new_gdist used
+    IF( cntl%new_gdist ) THEN
+       dime(1) = 1
+       dime(2) = 2
+    ELSE
+       dime(1) = 2
+       dime(2) = 3
+    END IF
+
     nh1=spar%nr1s/2+1
     nh2=spar%nr2s/2+1
     nh3=spar%nr3s/2+1
     DO ig=1,ncpw%ngw
-       ny2=inyh(1,ig)
-       ny3=inyh(2,ig)
+       ny2=inyh(dime(1),ig)
+       ny3=inyh(dime(2),ig)
        iny2=-ny2+2*nh2
        iny3=-ny3+2*nh3
        mg(ny2,ny3)=mg(ny2,ny3)+1
@@ -218,20 +229,34 @@ CONTAINS
     ENDDO
     kr1m=MAX(nr1m+MOD(nr1m+1,2),fpar%kr1)
     img=0
-    DO jfa=1,fpar%kr3s
-       j = MOD( ( fpar%kr3s / 2 ) + 1 + jfa - 1 - 1, fpar%kr3s ) + 1
-       DO ifa=1,fpar%kr2s
-          i = MOD( ( fpar%kr2s / 2 ) + 1 + ifa - 1 - 1, fpar%kr2s ) + 1
-          IF (mg(i,j).NE.0) THEN
-             img=img+1
-             mg(i,j)=img
-          ENDIF
+
+    !CLR new_gdist uses a centered plane-grid
+    IF ( cntl%new_gdist ) THEN
+       DO jfa=1,fpar%kr3s
+          j = MOD( ( fpar%kr3s / 2 ) + 1 + jfa - 1 - 1, fpar%kr3s ) + 1
+          DO ifa=1,fpar%kr2s
+             i = MOD( ( fpar%kr2s / 2 ) + 1 + ifa - 1 - 1, fpar%kr2s ) + 1
+             IF (mg(i,j).NE.0) THEN
+                img=img+1
+                mg(i,j)=img
+             ENDIF
+          ENDDO
        ENDDO
-    ENDDO
+    ELSE
+       DO j=1,fpar%kr3s
+          DO i=1,fpar%kr2s
+             IF (mg(i,j).NE.0) THEN
+                img=img+1
+                mg(i,j)=img
+             ENDIF
+          ENDDO
+       ENDDO
+    ENDIF
+
     ngray=img
     DO ig=ncpw%ngw+1,ncpw%nhg
-       ny2=inyh(1,ig)
-       ny3=inyh(2,ig)
+       ny2=inyh(dime(1),ig)
+       ny3=inyh(dime(2),ig)
        iny2=-ny2+2*nh2
        iny3=-ny3+2*nh3
        jmg=mg(ny2,ny3)
@@ -239,16 +264,27 @@ CONTAINS
        jmg=mg(iny2,iny3)
        IF (jmg.EQ.0) mg(iny2,iny3)=-1
     ENDDO
-    DO jfa=1,fpar%kr3s
-       j = MOD( ( fpar%kr3s / 2 ) + 1 + jfa - 1 - 1, fpar%kr3s ) + 1
-       DO ifa=1,fpar%kr2s
-          i = MOD( ( fpar%kr2s / 2 ) + 1 + ifa - 1 - 1, fpar%kr2s ) + 1
-          IF (mg(i,j).LT.0) THEN
-             img=img+1
-             mg(i,j)=img
-          ENDIF
+    IF ( cntl%new_gdist ) THEN
+       DO jfa=1,fpar%kr3s
+          j = MOD( ( fpar%kr3s / 2 ) + 1 + jfa - 1 - 1, fpar%kr3s ) + 1
+          DO ifa=1,fpar%kr2s
+             i = MOD( ( fpar%kr2s / 2 ) + 1 + ifa - 1 - 1, fpar%kr2s ) + 1
+             IF (mg(i,j).LT.0) THEN
+                img=img+1
+                mg(i,j)=img
+             ENDIF
+          ENDDO
        ENDDO
-    ENDDO
+    ELSE
+       DO j=1,fpar%kr3s
+          DO i=1,fpar%kr2s
+             IF (mg(i,j).LT.0) THEN
+                img=img+1
+                mg(i,j)=img
+             ENDIF
+          ENDDO
+       ENDDO
+    END IF
     nhray=img
     ! SCATTER ARRAY FOR FFT ALONG X
     !CLR: had problems with size, needed nhrm+1 for some reason... try it if error occurs
@@ -283,36 +319,51 @@ CONTAINS
        ENDDO
     ENDDO
     ! REDEFINE NZH AND INDZ FOR COMPRESSED STORAGE
-    ALLOCATE(nzh_r(MAX(fpar%nnr1,fpar%nng1)),STAT=ierr)
-    IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
-         __LINE__,__FILE__)
-    ALLOCATE(indz_r(MAX(fpar%nnr1,fpar%nng1)),STAT=ierr)
-    IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
-         __LINE__,__FILE__)
-    nn2=1
-    nzh = 0
-    indz = 0
-    DO ig=1,ncpw%nhg
-       ny1=inyh(1,ig)
-       ny2=inyh(2,ig)
-       ny3=inyh(3,ig)
-       IF( ny3 .lt. ( fpar%kr3s / 2 ) + 1 ) ny3 = ny3 + fpar%kr3s
-       iny1=-ny1+2*nh1
-       iny2=-ny2+2*nh2
-       iny3=-ny3+2*nh3
-       IF( iny3 .lt. ( fpar%kr3s / 2 ) + 1 ) iny3 = iny3 + fpar%kr3s
-       nzh(ig)=ny3 - ( fpar%kr3s / 2 ) + (mg(ny1,ny2)-1)*fpar%kr3s
-       nzh_r( nzh(ig) ) = ig
-       indz(ig)=iny3 - ( fpar%kr3s / 2 ) + (mg(iny1,iny2)-1)*fpar%kr3s
-       indz_r( indz(ig) ) = ig
-    ENDDO
+    !CLR additional arrays for write-consecutiveness
+    IF( cntl%new_gdist ) THEN
+       ALLOCATE(nzh_r(MAX(fpar%nnr1,fpar%nng1)),STAT=ierr)
+       IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
+            __LINE__,__FILE__)
+       ALLOCATE(indz_r(MAX(fpar%nnr1,fpar%nng1)),STAT=ierr)
+       IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
+            __LINE__,__FILE__)
+       nzh = 0
+       indz = 0
+       nn2=1
+       DO ig=1,ncpw%nhg
+          ny1=inyh(1,ig)
+          ny2=inyh(2,ig)
+          ny3=inyh(3,ig)
+          IF( ny3 .lt. ( fpar%kr3s / 2 ) + 1 ) ny3 = ny3 + fpar%kr3s
+          iny1=-ny1+2*nh1
+          iny2=-ny2+2*nh2
+          iny3=-ny3+2*nh3
+          IF( iny3 .lt. ( fpar%kr3s / 2 ) + 1 ) iny3 = iny3 + fpar%kr3s
+          nzh(ig)=ny3 - ( fpar%kr3s / 2 ) + (mg(ny1,ny2)-1)*fpar%kr3s
+          nzh_r( nzh(ig) ) = ig
+          indz(ig)=iny3 - ( fpar%kr3s / 2 ) + (mg(iny1,iny2)-1)*fpar%kr3s
+          indz_r( indz(ig) ) = ig
+       ENDDO
+    ELSE
+       nn2=1
+       DO ig=1,ncpw%nhg
+          ny1=inyh(1,ig)
+          ny2=inyh(2,ig)
+          ny3=inyh(3,ig)
+          iny1=-ny1+2*nh1
+          iny2=-ny2+2*nh2
+          iny3=-ny3+2*nh3
+          nzh(ig)=ny1 + (mg(ny2,ny3)-1)*fpar%kr1s
+          indz(ig)=iny1 + (mg(iny2,iny3)-1)*fpar%kr1s
+       ENDDO
+    END IF
     !$omp parallel do private(IG)
     DO ig=1,ncpw%ngw
        nzhs(ig)=nzh(ig)
        indzs(ig)=indz(ig)
     ENDDO
-    ! Setup new gdist FFT Maps
-    CALL Prep_fft_new_gdist_Maps( tfft )
+    !CLR Setup new_gdist FFT Maps
+    IF( cntl%new_gdist ) CALL Prep_fft_new_gdist_Maps( tfft )
     ! Some dimensions used for groups
     fpar%krx=1
     IF (group%nogrp.GT.1) THEN
@@ -346,7 +397,7 @@ CONTAINS
        nclu = parai%nproc * nr1m*fpar%kr2s*nr3m
        maxfft = MAX(nclu,maxfft)
     ENDIF
-    maxfft = MAX(maxfft,fpar%nng1)
+    IF( cntl%new_gdist ) maxfft = MAX(maxfft,fpar%nng1)
     IF( cp_cuda_env%use_fft ) THEN
 #if defined(_HAS_CUDA)
        block         
@@ -477,11 +528,13 @@ CONTAINS
        !if autotuning is requested, we use this batchsize to set fft_max_numbatches
        a2a_msgsize=a2a_msgsize*1024/(parai%nproc*16)
        fft_batchsize=FLOOR(REAL(a2a_msgsize,KIND=real_8)/REAL(lda,KIND=real_8))
-       IF( parai%nnode .eq. 1 .and. parai%cp_nogrp .eq. 1 ) fft_batchsize = 1
-       IF( cntl%fft_prescribe_batchsize ) fft_batchsize = cnti%fft_prescribed_batchsize
-       IF (paral%io_parent)&
-            WRITE(6,'(A46,I3)')&
-            'BATCHSIZE PRESCRIPTION DETECTED | BATCHSIZE = ', fft_batchsize
+       IF( cntl%new_gdist .and. parai%nnode .eq. 1 .and. parai%cp_nogrp .eq. 1 ) fft_batchsize = 1
+       IF( cntl%fft_prescribe_batchsize ) THEN
+          fft_batchsize = cnti%fft_prescribed_batchsize
+          IF (paral%io_parent)&
+               WRITE(6,'(A46,I3)')&
+               'BATCHSIZE PRESCRIPTION DETECTED | BATCHSIZE = ', fft_batchsize
+       END IF
        IF(fft_batchsize.LE.0) fft_batchsize=1
        fft_residual=MOD(fft_total,fft_batchsize)
        fft_numbatches=(fft_total-fft_residual)/fft_batchsize
