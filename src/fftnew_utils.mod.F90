@@ -35,6 +35,7 @@ MODULE fftnew_utils
                                              mp_recv_init_COMPLEX
   USE parac,                           ONLY: parai,&
                                              paral
+  USE store_types,                     ONLY: restart1 
   USE system,                          ONLY: fpar,&
                                              ncpw,&
                                              parap,&
@@ -55,7 +56,8 @@ MODULE fftnew_utils
   !public :: rmfftnset
   PUBLIC :: addfftnset
   !public :: setrays
-  PUBLIC :: Pre_fft_new_gdist_setup
+  PUBLIC :: fft_new_gdist_batch_setup
+  PUBLIC :: fft_new_gdist_setup
   PUBLIC :: Prep_fft_comm_preinitialized
   PUBLIC :: Make_Manual_Maps
   PUBLIC :: Make_z2y_Maps
@@ -663,7 +665,7 @@ CONTAINS
     ! ==--------------------------------------------------------------==
   END SUBROUTINE setrays
   ! ==================================================================
-  SUBROUTINE Pre_fft_new_gdist_setup( tfft, nstate, sendsize, sendsize_rem, spin )
+  SUBROUTINE fft_new_gdist_batch_setup( tfft, nstate, sendsize, sendsize_rem, spin )
     IMPLICIT NONE
 
     TYPE(FFT_TYPE_DESCRIPTOR), INTENT(INOUT) :: tfft
@@ -676,7 +678,7 @@ CONTAINS
     LOGICAL, SAVE :: first, DEBUG_shared_mem = .false.
     TYPE(C_PTR) :: baseptr( 0:parai%node_nproc-1 )
     INTEGER :: arrayshape(3,4), needed_size(4)
-    CHARACTER(*), PARAMETER                  :: procedureN = 'Pre_fft_new_gdist_setup'
+    CHARACTER(*), PARAMETER                  :: procedureN = 'fft_new_gdist_batch_setup'
     COMPLEX(real_8), SAVE, POINTER, CONTIGUOUS   :: Big_Com_Pointer(:,:,:)
     LOGICAL,         SAVE, POINTER, CONTIGUOUS   :: Big_1Log_Pointer(:,:,:)
     LOGICAL,         SAVE, POINTER, CONTIGUOUS   :: Big_2Log_Pointer(:,:,:)
@@ -927,7 +929,55 @@ CONTAINS
     END IF
 
 
-  END SUBROUTINE Pre_fft_new_gdist_setup
+  END SUBROUTINE fft_new_gdist_batch_setup
+
+  SUBROUTINE fft_new_gdist_setup( tfft, nss, nr1s, ngs )
+    IMPLICIT NONE
+
+    TYPE(FFT_TYPE_DESCRIPTOR), INTENT(INOUT) :: tfft
+    INTEGER, INTENT(IN) :: ngs
+    INTEGER, INTENT(IN) :: nss(:), nr1s
+
+    INTEGER :: sendsize
+    LOGICAL, SAVE :: first = .true.
+    TYPE(C_PTR) :: baseptr( 0:parai%node_nproc-1 )
+    INTEGER :: arrayshape(3)           
+    COMPLEX(real_8), SAVE, POINTER, CONTIGUOUS   :: Big_Pointer(:,:,:)
+
+    IF( first .and. .not. restart1%rwf ) THEN
+
+       first = .false.
+
+       sendsize = MAXVAL ( tfft%nr3p ) * MAXVAL( nss ) * parai%max_node_nproc * parai%max_node_nproc
+
+       CALL mp_win_alloc_shared_mem( 'c', sendsize*parai%nnode*2, 1, baseptr, parai%node_nproc, parai%node_me, parai%node_grp )
+
+       arrayshape(1) = sendsize*parai%nnode
+       arrayshape(2) = 1
+       arrayshape(3) = 2
+       CALL C_F_POINTER( baseptr(0), Big_Pointer, arrayshape )
+       comm_send => Big_Pointer(:,:,1)
+       comm_recv => Big_Pointer(:,:,2)
+
+       CALL Prep_fft_comm_preinitialized( comm_send, comm_recv, sendsize, 0, parai%nnode, parai%me, parai%my_node, parai%node_me, &
+                          parai%node_nproc, parai%max_node_nproc, parai%cp_overview, 1, tfft%comm_sendrecv(:,2), tfft%do_comm(2), 2 )
+
+       CALL Make_Manual_Maps( tfft, 1, 0, nss, nr1s, ngs, tfft%which, 0 )
+
+       IF( .not. allocated( locks_omp ) ) ALLOCATE( locks_omp( parai%ncpus_FFT, 1, 20 ) )
+       !$ locks_omp = .true.
+       IF( .not. allocated( locks_omp_big ) ) ALLOCATE( locks_omp_big( parai%ncpus_FFT, 1, 1, 20 ) )
+       !$ locks_omp_big = .true.
+
+    ELSE IF( first .and. restart1%rwf ) THEN
+
+       first = .false.
+
+       CALL Make_Manual_Maps( tfft, 1, 0, nss, nr1s, ngs, tfft%which, 0 )
+
+    END IF
+
+  END SUBROUTINE
 
   SUBROUTINE Prep_fft_comm_preinitialized( comm_send, comm_recv, sendsize, sendsize_rem, nodes_numb, mype, my_node, my_node_rank, node_task_size, &
                            max_node_task_size, cp_overview, buffer_size, comm_sendrecv, do_comm, WAVE )

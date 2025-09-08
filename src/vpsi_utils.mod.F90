@@ -67,7 +67,7 @@ MODULE vpsi_utils
                                              invfft_new_gdist_batch,&
                                              fwfft_new_gdist_batch
   USE fftnew_utils,                    ONLY: setfftn,&
-                                             Pre_fft_new_gdist_setup,&
+                                             fft_new_gdist_batch_setup,&
                                              Pre_Initialize_C2_Com,&
                                              comm_send,&
                                              comm_recv,&
@@ -2135,7 +2135,7 @@ CONTAINS
        i_start4 = 0
     END IF
 
-    CALL Pre_fft_new_gdist_setup( tfft, nstate_local, sendsize, sendsize_rem, lspin )
+    CALL fft_new_gdist_batch_setup( tfft, nstate_local, sendsize, sendsize_rem, lspin )
 
     IF( remember_batch .ne. fft_batchsize ) THEN
        remember_batch = fft_batchsize

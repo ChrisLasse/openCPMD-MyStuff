@@ -68,7 +68,7 @@ MODULE rhoofr_utils
                                              invfftn_batch,&
                                              invfft_new_gdist_batch
   USE fftnew_utils,                    ONLY: setfftn,&
-                                             Pre_fft_new_gdist_setup,&
+                                             fft_new_gdist_batch_setup,&
                                              comm_send,&
                                              comm_recv,&
                                              locks_calc_inv,&
@@ -1430,7 +1430,7 @@ CONTAINS
     CALL part_1d_get_blk_bounds( nstate, parai%cp_inter_me, parai%cp_nogrp, fir, las )
     nstate_local = las - fir + 1
 
-    CALL Pre_fft_new_gdist_setup( tfft, nstate_local, sendsize, sendsize_rem, ispin )
+    CALL fft_new_gdist_batch_setup( tfft, nstate_local, sendsize, sendsize_rem, ispin )
 
     IF( fft_numbuff .eq. 3 ) THEN
        fft_numbuff = 2

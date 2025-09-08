@@ -36,6 +36,7 @@ MODULE fftmain_utils
                                              fftcu_inv_sprs_1,&
                                              fftcu_inv_sprs_2
   USE fftnew_utils,                    ONLY: Prep_fft_comm_preinitialized,&
+                                             fft_new_gdist_setup,&
                                              comm_send,&
                                              comm_recv,&
                                              locks_calc_inv,&
@@ -659,7 +660,7 @@ CONTAINS
             & copy_data_to_device=copy_data_to_device, copy_data_to_host=copy_data_to_host )
     ELSE
        IF( cntl%new_gdist ) THEN
-          CALL fft_new_gdist( isign, tfft, f, tfft%nhg, tfft%nr1p, tfft%ir1p, tfft%nsp )
+          CALL fft_new_gdist( isign, tfft, f, tfft%nhg, tfft%nr1p, tfft%nsp )
        ELSE
           CALL fftnew(isign,f,sparse, parai%allgrp )
        END IF
@@ -702,7 +703,7 @@ CONTAINS
             & copy_data_to_device=copy_data_to_device, copy_data_to_host=copy_data_to_host )
     ELSE
        IF( cntl%new_gdist ) THEN
-          CALL fft_new_gdist( isign, tfft, f, tfft%nhg, tfft%nr1p, tfft%ir1p, tfft%nsp )
+          CALL fft_new_gdist( isign, tfft, f, tfft%nhg, tfft%nr1p, tfft%nsp )
        ELSE
           CALL fftnew(isign,f,sparse, parai%allgrp )
        END IF
@@ -999,14 +1000,14 @@ CONTAINS
 
   END SUBROUTINE fft_new_gdist_batch
 
-  SUBROUTINE fft_new_gdist( isign, tfft, f, ngs, nr1s, ir1s, nss )
+  SUBROUTINE fft_new_gdist( isign, tfft, f, ngs, nr1s, nss )
 
     IMPLICIT NONE
 
     TYPE(FFT_TYPE_DESCRIPTOR), INTENT(INOUT) :: tfft
     INTEGER, INTENT(IN) :: isign, ngs
     COMPLEX(real_8), TARGET, INTENT(INOUT) :: f(:)
-    INTEGER, INTENT(IN) :: ir1s(:), nss(:), nr1s
+    INTEGER, INTENT(IN) :: nss(:), nr1s
 
 #ifdef _USE_SCRATCHLIBRARY
     COMPLEX(real_8), POINTER, SAVE __CONTIGUOUS, ASYNCHRONOUS :: aux(:,:)
@@ -1017,11 +1018,6 @@ CONTAINS
     INTEGER(int_8) :: il_aux(2)
     INTEGER :: i, ierr, isub, mythread
     CHARACTER(*), PARAMETER                  :: procedureN = 'fft_new_gdist'
-    LOGICAL, SAVE :: first = .true.
-    INTEGER, SAVE :: sendsize
-    TYPE(C_PTR) :: baseptr( 0:parai%node_nproc-1 )
-    INTEGER :: arrayshape(3)
-    COMPLEX(real_8), SAVE, POINTER, CONTIGUOUS   :: Big_Pointer(:,:,:)
 
 !    CALL tiset(procedureN,isub)
 
@@ -1039,38 +1035,7 @@ CONTAINS
 
     tfft%which = 2
 
-    IF( first .and. .not. restart1%rwf ) THEN
-
-       first = .false.
-
-       sendsize = MAXVAL ( tfft%nr3p ) * MAXVAL( nss ) * parai%max_node_nproc * parai%max_node_nproc
-
-       CALL mp_win_alloc_shared_mem( 'c', sendsize*parai%nnode*2, 1, baseptr, parai%node_nproc, parai%node_me, parai%node_grp )
-
-       arrayshape(1) = sendsize*parai%nnode
-       arrayshape(2) = 1
-       arrayshape(3) = 2
-       CALL C_F_POINTER( baseptr(0), Big_Pointer, arrayshape )
-       comm_send => Big_Pointer(:,:,1)
-       comm_recv => Big_Pointer(:,:,2)
-
-       CALL Prep_fft_comm_preinitialized( comm_send, comm_recv, sendsize, 0, parai%nnode, parai%me, parai%my_node, parai%node_me, &
-                          parai%node_nproc, parai%max_node_nproc, parai%cp_overview, 1, tfft%comm_sendrecv(:,2), tfft%do_comm(2), 2 )
-
-       CALL Make_Manual_Maps( tfft, 1, 0, nss, nr1s, ngs, tfft%which, 0 )
-
-       IF( .not. allocated( locks_omp ) ) ALLOCATE( locks_omp( parai%ncpus_FFT, 1, 20 ) )
-       !$ locks_omp = .true.
-       IF( .not. allocated( locks_omp_big ) ) ALLOCATE( locks_omp_big( parai%ncpus_FFT, 1, 1, 20 ) )
-       !$ locks_omp_big = .true.
-
-    ELSE IF( first .and. restart1%rwf ) THEN
-
-       first = .false.
-
-       CALL Make_Manual_Maps( tfft, 1, 0, nss, nr1s, ngs, tfft%which, 0 )
-
-    END IF
+    CALL fft_new_gdist_setup( tfft, nss, nr1s, ngs )
 
     CALL MPI_BARRIER( parai%allgrp, ierr )
     !$ locks_omp = .true.
