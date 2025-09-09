@@ -58,10 +58,13 @@ MODULE fftnew_utils
   !public :: setrays
   PUBLIC :: fft_new_gdist_batch_setup
   PUBLIC :: fft_new_gdist_setup
+  PUBLIC :: fft_new_gdist_setup_noshared
   PUBLIC :: Prep_fft_comm_preinitialized
+  PUBLIC :: Prep_fft_comm_preinitialized2
   PUBLIC :: Make_Manual_Maps
   PUBLIC :: Make_z2y_Maps
   PUBLIC :: Pre_Initialize_C2_Com
+  PUBLIC :: Make_z2y_Maps2
 
   COMPLEX(real_8), POINTER, SAVE, CONTIGUOUS :: comm_send(:,:)
   PUBLIC :: comm_send
@@ -979,6 +982,52 @@ CONTAINS
 
   END SUBROUTINE
 
+  SUBROUTINE fft_new_gdist_setup_noshared( tfft, nss, nr1s, ngs )
+    IMPLICIT NONE
+
+    TYPE(FFT_TYPE_DESCRIPTOR), INTENT(INOUT) :: tfft
+    INTEGER, INTENT(IN) :: ngs
+    INTEGER, INTENT(IN) :: nss(:), nr1s
+
+    INTEGER :: sendsize
+    LOGICAL, SAVE :: first = .true.
+    TYPE(C_PTR) :: baseptr( 0:parai%node_nproc-1 )
+    INTEGER :: arrayshape(3)           
+    COMPLEX(real_8), SAVE, POINTER, CONTIGUOUS   :: Big_Pointer(:,:,:)
+
+    IF( first .and. .not. restart1%rwf ) THEN
+
+       first = .false.
+
+       sendsize = MAXVAL ( tfft%nr3p ) * MAXVAL( nss )
+
+       arrayshape(1) = sendsize*parai%cp_nproc
+       arrayshape(2) = 1
+       arrayshape(3) = 2
+       ALLOCATE( Big_Pointer( arrayshape(1), arrayshape(2), arrayshape(3) ) )
+       comm_send => Big_Pointer(:,:,1)
+       comm_recv => Big_Pointer(:,:,2)
+
+       CALL Prep_fft_comm_preinitialized2( comm_send, comm_recv, sendsize, 0, parai%nnode, parai%me, parai%my_node, parai%node_me, &
+                          parai%node_nproc, parai%max_node_nproc, parai%cp_overview, 1, tfft%comm_sendrecv(:,2), tfft%do_comm(2), 2 )
+
+       CALL Make_Manual_Maps( tfft, 1, 0, nss, nr1s, ngs, tfft%which, 0 )
+
+       IF( .not. allocated( locks_omp ) ) ALLOCATE( locks_omp( parai%ncpus_FFT, 1, 20 ) )
+       !$ locks_omp = .true.
+       IF( .not. allocated( locks_omp_big ) ) ALLOCATE( locks_omp_big( parai%ncpus_FFT, 1, 1, 20 ) )
+       !$ locks_omp_big = .true.
+
+    ELSE IF( first .and. restart1%rwf ) THEN
+
+       first = .false.
+
+       CALL Make_Manual_Maps( tfft, 1, 0, nss, nr1s, ngs, tfft%which, 0 )
+
+    END IF
+
+  END SUBROUTINE
+
   SUBROUTINE Prep_fft_comm_preinitialized( comm_send, comm_recv, sendsize, sendsize_rem, nodes_numb, mype, my_node, my_node_rank, node_task_size, &
                            max_node_task_size, cp_overview, buffer_size, comm_sendrecv, do_comm, WAVE )
     IMPLICIT NONE
@@ -1129,6 +1178,156 @@ CONTAINS
     END IF
 
   END SUBROUTINE Prep_fft_comm_preinitialized
+  ! ==================================================================
+  SUBROUTINE Prep_fft_comm_preinitialized2( comm_send, comm_recv, sendsize, sendsize_rem, nodes_numb, mype, my_node, my_node_rank, node_task_size, &
+                           max_node_task_size, cp_overview, buffer_size, comm_sendrecv, do_comm, WAVE )
+    IMPLICIT NONE
+
+    INTEGER, INTENT(IN)                                 :: sendsize, sendsize_rem, nodes_numb, mype, my_node, my_node_rank, node_task_size, buffer_size, max_node_task_size
+    COMPLEX(real_8), INTENT(IN)                             :: comm_send( : , : )
+    COMPLEX(real_8), INTENT(INOUT)                          :: comm_recv( : , : )
+    INTEGER, INTENT(OUT)                                :: comm_sendrecv( : )
+    INTEGER, INTENT(IN)                                 :: cp_overview( : , : )
+    LOGICAL, INTENT(OUT)                                :: do_comm
+    INTEGER, INTENT(IN)                                 :: WAVE
+
+    LOGICAL, SAVE :: first = .true.
+    INTEGER, SAVE :: buffer_size_save
+
+    INTEGER, ALLOCATABLE :: comm_info_send(:,:), comm_info_recv(:,:)
+
+    INTEGER :: i, j, k, l, m, n, p, jter, f
+    INTEGER :: ierr, eff_nodes, rem, origin_node, target_node
+
+!    !Send to every other node but me
+!    eff_nodes = nodes_numb - 1
+!
+!    howmany_sending = 0
+!    howmany_receiving = 0
+!    IF( my_node_rank .eq. 0 ) THEN
+!       !We have eff_nodes-many send and receiv jobs -> distribute among available tasks on node
+!       howmany_sending( 1:node_task_size , my_node+1 )   = eff_nodes / node_task_size
+!       howmany_receiving( 1:node_task_size , my_node+1 ) = eff_nodes / node_task_size
+!       !Distribute Remainder jobs evenly
+!       rem = mod( eff_nodes, node_task_size )
+!       DO i = 1, rem * 2
+!          k = mod( i-1, node_task_size ) + 1
+!          IF( i .le. rem ) howmany_sending( k , my_node+1 )   = howmany_sending( k , my_node+1 )   + 1
+!          IF( i .gt. rem ) howmany_receiving( k , my_node+1 ) = howmany_receiving( k , my_node+1 ) + 1
+!       ENDDO
+!    END IF
+!    Call mp_sum( howmany_sending  , max_node_task_size*nodes_numb, parai%allgrp )
+!    Call mp_sum( howmany_receiving, max_node_task_size*nodes_numb, parai%allgrp )
+!
+!    ALLOCATE( comm_info_send( MAXVAL( howmany_sending( 1 , : ) ), parai%nproc ) )
+!    ALLOCATE( comm_info_recv( MAXVAL( howmany_sending( 1 , : ) ), parai%nproc ) )
+!    comm_info_send = 0
+!    comm_info_recv = 0
+!    comm_sendrecv(1) = howmany_sending  ( my_node_rank+1 , my_node+1 )
+!    comm_sendrecv(2) = howmany_receiving( my_node_rank+1 , my_node+1 )
+!
+!    do_comm = .true.
+!    IF( comm_sendrecv(1) .eq. 0 .and. comm_sendrecv(2) .eq. 0 ) do_comm = .false.
+!
+!    save_node = -1
+!    !Sending Allgrp-Rank
+!    DO i = 1, parai%nproc
+!       send_node      = parai%cp_overview( 4, i )
+!       send_node_task = parai%cp_overview( 2, i )
+!       IF( save_node .ne. send_node ) com_done = .false.
+!       save_node = send_node
+!
+!  s_l: DO l = 1, howmany_sending( send_node_task+1, send_node+1 )
+!
+!          !Receiving Allgrp-Rank
+!          DO m = 1, parai%nproc
+!             recv_node      = parai%cp_overview( 4, m )
+!             recv_node_task = parai%cp_overview( 2, m )
+!             !Check if same node / nodes already communicated
+!             IF( send_node .eq. recv_node .or. com_done( recv_node+1 ) ) CYCLE
+!
+!             !Check if task has open receiving jobs
+!             IF( howmany_receiving( recv_node_task+1 , recv_node+1 ) .ne. 0 ) THEN
+!                com_done( recv_node+1 ) = .true.
+!                !Remove one receiving job
+!                howmany_receiving( recv_node_task+1 , recv_node+1 ) = howmany_receiving( recv_node_task+1 , recv_node+1 ) - 1
+!                !Save Sending and Receiving Rank
+!                comm_info_send( l , i ) = m
+!                DO p = 1, MAXVAL( howmany_sending( 1 , : ) )
+!                   IF( comm_info_recv( p , m ) .eq. 0 ) THEN
+!                      comm_info_recv( p , m ) = i
+!                      EXIT
+!                   END IF
+!                ENDDO
+!                CYCLE s_l
+!             END IF
+!
+!          ENDDO
+!
+!       ENDDO s_l
+!
+!    ENDDO
+
+    IF( parai%cp_nproc .gt. 1 ) do_comm = .true.
+
+    !CLR: Do the requests have to be freed before deallocation? Currently not done!
+    IF( ALLOCATED( parai%sendrecv_handle2 ) .and. WAVE .eq. 1 )       DEALLOCATE( parai%sendrecv_handle2 )
+
+    IF( .not. ALLOCATED(parai%sendrecv_handle2) ) ALLOCATE( parai%sendrecv_handle2( 2 * (parai%cp_nproc-1), buffer_size, 2, 2 ) )
+
+    DO i = 1, buffer_size !INITIALIZE SENDING AND RECEIVING
+
+       f = 0
+       DO j = 1, parai%cp_nproc
+          IF( j .eq. mype+1 ) CYCLE
+          f = f + 1
+
+          CALL mp_send_init_complex( comm_send(:,i), (j-1)*sendsize, sendsize, j-1, mype, &
+                                     parai%allgrp, parai%sendrecv_handle2( f , i, 1, WAVE ) )
+
+       ENDDO
+
+       f = 0
+       DO j = 1, parai%cp_nproc
+          IF( j .eq. mype+1 ) CYCLE
+          f = f + 1
+
+          CALL mp_recv_init_complex( comm_recv(:,i), (j-1)*sendsize, sendsize, j-1, &
+                                     parai%allgrp, parai%sendrecv_handle2( parai%cp_nproc-1 + f , i, 1, WAVE ) )
+
+       ENDDO
+
+    ENDDO
+
+    IF( sendsize_rem .ne. 0 ) THEN
+
+       DO i = 1, buffer_size !INITIALIZE SENDING AND RECEIVING
+
+          f = 0
+          DO j = 1, parai%cp_nproc
+             IF( j .eq. mype+1 ) CYCLE
+             f = f + 1
+
+             CALL mp_send_init_complex( comm_send(:,i), (j-1)*sendsize_rem, sendsize_rem, j-1, mype, &
+                                        parai%allgrp, parai%sendrecv_handle2( f , i, 2, WAVE ) )
+
+          ENDDO
+
+          f = 0
+          DO j = 1, parai%cp_nproc
+             IF( j .eq. mype+1 ) CYCLE
+             f = f + 1
+
+             CALL mp_recv_init_complex( comm_recv(:,i), (j-1)*sendsize_rem, sendsize_rem, j-1, &
+                                        parai%allgrp, parai%sendrecv_handle2( parai%cp_nproc-1 + f , i, 2, WAVE ) )
+
+          ENDDO
+
+       ENDDO
+
+    END IF
+
+  END SUBROUTINE Prep_fft_comm_preinitialized2
   ! ==================================================================
   SUBROUTINE Make_Manual_Maps( tfft, batch_size, rem_size, nss, nr1s, ngs, which, nstate )
     IMPLICIT NONE
@@ -1422,6 +1621,76 @@ CONTAINS
     END IF
 
   END SUBROUTINE Make_z2y_Maps
+  ! ==================================================================
+  SUBROUTINE Make_z2y_Maps2( tfft, map_z2y, batch_size, ir1s, nss, my_nr1s, small_chunks, big_chunks, zero_start, zero_end )
+    IMPLICIT NONE
+
+    TYPE(FFT_TYPE_DESCRIPTOR), INTENT(INOUT) :: tfft
+    INTEGER, INTENT(IN)  :: batch_size, my_nr1s, small_chunks, big_chunks
+    INTEGER, INTENT(OUT) :: map_z2y(:)
+    INTEGER, INTENT(IN)  :: ir1s(:), nss(:)
+    INTEGER, OPTIONAL, INTENT(OUT) :: zero_start(:), zero_end(:)
+
+    LOGICAL :: l_map( tfft%my_nr3p * my_nr1s * fpar%kr2s )
+    LOGICAL :: first
+    INTEGER :: j, l, i, k
+    INTEGER :: offset, m, m1, m2, ip, pos
+    INTEGER :: ierr
+
+    l_map = .false.
+    map_z2y = 0
+
+    !$omp parallel private( j, l, ip, offset, i, m, m1, m2, pos, k)
+    ip = 0
+    DO j = 1, parai%nnode
+       DO l = 1, parai%node_nproc_overview( j )
+          ip = ip + 1
+          offset = (ip-1) * batch_size * small_chunks
+          !$omp do
+          DO i = 1, nss( ip )
+             m = tfft%ismap( i + tfft%iss(ip) ) !number of current pencil
+             m1 = mod ( m-1, fpar%kr1s ) + 1     !coordinate of pencil
+             m2 = (m-1)/fpar%kr1s + 1            !other coordinate of pencil
+             pos = m2 + ( ir1s(m1) - 1 ) * fpar%kr2s
+             DO k = 1, tfft%my_nr3p
+                l_map( pos ) = .true.
+                map_z2y( pos ) = k + offset + tfft%nr3px * (i-1)
+                pos = pos + fpar%kr2s * my_nr1s
+             ENDDO
+          ENDDO
+          !$omp end do
+       ENDDO
+    ENDDO
+    !$omp end parallel
+
+    IF( present( zero_start ) ) THEN
+
+       zero_start = 0
+       zero_end = fpar%kr2s
+       first = .true.
+
+       DO j = 1, my_nr1s
+          first = .true.
+          DO l = 1, fpar%kr2s
+
+             IF( l_map( (j-1)*fpar%kr2s + l ) .eqv. .true. ) THEN
+                IF( first .eqv. .false. ) THEN
+                   zero_end( j ) = l-1
+                   first = .true.
+                END IF
+             ELSE
+                IF( first .eqv. .true. ) THEN
+                   zero_start( j ) = l
+                   first = .false.
+                END IF
+             END IF
+
+          ENDDO
+       ENDDO
+
+    END IF
+
+  END SUBROUTINE Make_z2y_Maps2
   ! ==================================================================
 
   SUBROUTINE Pre_Initialize_C2_Com( c2, nstate, las, nstate_local, my_start, c2_com_num, c2_com_recv, fft_batchsize, fft_residual, fft_numbatches, cp_nstates, s4_coms, my_ngw )

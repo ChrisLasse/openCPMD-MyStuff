@@ -37,6 +37,8 @@ MODULE fftmain_utils
                                              fftcu_inv_sprs_2
   USE fftnew_utils,                    ONLY: Prep_fft_comm_preinitialized,&
                                              fft_new_gdist_setup,&
+                                             fft_new_gdist_setup_noshared,&
+                                             Prep_fft_comm_preinitialized2,&
                                              comm_send,&
                                              comm_recv,&
                                              locks_calc_inv,&
@@ -66,11 +68,15 @@ MODULE fftmain_utils
                                              unpack_y2x,&
                                              unpack_y2x_n,&
                                              fft_comm_preinitialized,&
+                                             fft_comm_preinitialized2,&
                                              invfft_z_section,&
+                                             invfft_z_section2,&
                                              invfft_y_section,&
                                              invfft_x_section,&
                                              fwfft_z_section,&
+                                             fwfft_z_section2,&
                                              fwfft_y_section,&
+                                             fwfft_y_section2,&
                                              fwfft_x_section
   USE kinds,                           ONLY: real_8,&
                                              int_8
@@ -1035,7 +1041,7 @@ CONTAINS
 
     tfft%which = 2
 
-    CALL fft_new_gdist_setup( tfft, nss, nr1s, ngs )
+    CALL fft_new_gdist_setup_noshared( tfft, nss, nr1s, ngs )
 
     CALL MPI_BARRIER( parai%allgrp, ierr )
     !$ locks_omp = .true.
@@ -1049,12 +1055,12 @@ CONTAINS
     IF( isign .eq. -1 ) THEN !!  invfft
 
 
-       CALL invfft_z_section( tfft, f, comm_send(:,1), comm_recv(:,1), 1, 1, mythread, nss, 1 )
+       CALL invfft_z_section2( tfft, f, comm_send(:,1), comm_recv(:,1), 1, 1, mythread, nss, 1 )
 
        !$OMP barrier
        !$OMP master
           CALL MPI_BARRIER( parai%allgrp, ierr )
-          IF( tfft%do_comm(2) ) CALL fft_comm_preinitialized( tfft, 1, 1, 2 )
+          IF( tfft%do_comm(2) ) CALL fft_comm_preinitialized2( tfft, 1, 1, 2 )
           CALL MPI_BARRIER( parai%allgrp, ierr )
        !$OMP end master
        !$OMP barrier
@@ -1071,17 +1077,17 @@ CONTAINS
 
        !$OMP barrier
 
-       CALL fwfft_y_section( tfft, f, aux(:,1), comm_send(:,1), comm_recv(:,1), tfft%map_y2z(:,2), 1, 1, 1, mythread )
+       CALL fwfft_y_section2( tfft, f, aux(:,1), comm_send(:,1), comm_recv(:,1), tfft%map_y2z(:,2), 1, 1, 1, mythread )
 
        !$OMP barrier
        !$OMP master
           CALL MPI_BARRIER( parai%allgrp, ierr )
-          IF( tfft%do_comm(2) ) CALL fft_comm_preinitialized( tfft, 1, 1, 2 )
+          IF( tfft%do_comm(2) ) CALL fft_comm_preinitialized2( tfft, 1, 1, 2 )
           CALL MPI_BARRIER( parai%allgrp, ierr )
        !$OMP end master
        !$OMP barrier
 
-       CALL fwfft_z_section( tfft, comm_recv(:,1), f, 1, 1, 1, mythread, tfft%nsp, tfft%tscale )
+       CALL fwfft_z_section2( tfft, comm_recv(:,1), f, 1, 1, 1, mythread, tfft%nsp, tfft%tscale )
 
     END IF
 

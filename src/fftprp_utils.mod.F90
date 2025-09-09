@@ -28,7 +28,8 @@ MODULE fftprp_utils
   USE fft_maxfft,                      ONLY: maxfft
   USE fftnew_utils,                    ONLY: addfftnset,&
                                              setfftn,&
-                                             Make_z2y_Maps
+                                             Make_z2y_Maps,&
+                                             Make_z2y_Maps2
   USE isos,                            ONLY: isos1
   USE kinds,                           ONLY: real_8
   USE kpts,                            ONLY: tkpts
@@ -849,7 +850,7 @@ CONTAINS
     ALLOCATE( tfft%map_z2y_pot( tfft%my_nr3p * tfft%nr1p * fpar%kr2s ), STAT=ierr )
     IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
        __LINE__,__FILE__)
-    CALL Make_z2y_Maps( tfft, tfft%map_z2y_pot, 1, tfft%ir1p, tfft%nsp, tfft%nr1p, tfft%small_chunks(2), tfft%big_chunks(2), tfft%zero_z2y_start(:,2), tfft%zero_z2y_end(:,2) )
+    CALL Make_z2y_Maps2( tfft, tfft%map_z2y_pot, 1, tfft%ir1p, tfft%nsp, tfft%nr1p, tfft%small_chunks(2), tfft%big_chunks(2), tfft%zero_z2y_start(:,2), tfft%zero_z2y_end(:,2) )
 
     !Packing y2z
     ALLOCATE( tfft%map_y2z( tfft%nr3px * parai%nproc * MAXVAL( tfft%nsp ), 2 ), STAT=ierr )

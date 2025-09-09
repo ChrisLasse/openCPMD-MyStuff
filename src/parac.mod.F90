@@ -127,6 +127,7 @@ MODULE parac
      type(MPI_REQUEST), ALLOCATABLE :: c2_send_handle_counter(:)
      type(MPI_REQUEST), ALLOCATABLE :: c2_recv_handle_counter(:)
      type(MPI_REQUEST), ALLOCATABLE :: c2_comb_handle_counter(:)
+     type(MPI_REQUEST), ALLOCATABLE :: sendrecv_handle2(:,:,:,:)
 #endif
      INTEGER :: nnode = HUGE(0)
      INTEGER :: my_node = HUGE(0)
