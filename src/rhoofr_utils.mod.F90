@@ -69,7 +69,6 @@ MODULE rhoofr_utils
                                              invfft_new_gdist_batch
   USE fftnew_utils,                    ONLY: setfftn,&
                                              fft_new_gdist_batch_setup,&
-                                             fft_new_gdist_batch_setup2,&
                                              comm_send,&
                                              comm_send2,&
                                              comm_recv,&
@@ -1434,7 +1433,7 @@ CONTAINS
     CALL part_1d_get_blk_bounds( nstate, parai%cp_inter_me, parai%cp_nogrp, fir, las )
     nstate_local = las - fir + 1
 
-    CALL fft_new_gdist_batch_setup2( tfft, nstate_local, sendsize, sendsize_rem, ispin )
+    CALL fft_new_gdist_batch_setup( tfft, nstate_local, sendsize, sendsize_rem, ispin )
 
     IF( fft_numbuff .eq. 3 ) THEN
        fft_numbuff = 2
@@ -1537,7 +1536,7 @@ CONTAINS
 !                ! ==  to swap                                                     ==
 !                ! ==--------------------------------------------------------------==
                 swap=mod(ibatch,fft_numbuff)+1
-                CALL invfft_new_gdist_batch( tfft, 1, bsize, 1, remswitch, mythread, counter(1), swap, f_inout1=aux_array(:,swap2:swap2), f_inout2=comm_send2, f_inout3=comm_recv2 ) 
+                CALL invfft_new_gdist_batch( tfft, 1, bsize, 1, remswitch, mythread, counter(1), swap, f_inout1=aux_array(:,swap2:swap2), f_inout2=comm_send, f_inout3=comm_recv ) 
              END IF
           END IF
        END IF
@@ -1583,7 +1582,7 @@ CONTAINS
                    IF( ispec .eq. 1 ) counter(3) = counter(3) + 1
                    start = (ispec+((counter(3)-1)*fft_batchsize))
                    CALL invfft_new_gdist_batch( tfft, 3, bsize, ispec, remswitch, mythread, counter(3), swap, &
-                                      f_inout1=comm_recv2, f_inout2=aux_array( : , swap2 : swap2 ) )
+                                      f_inout1=comm_recv, f_inout2=aux_array( : , swap2 : swap2 ) )
                    CALL invfft_new_gdist_batch( tfft, 4, bsize, ispec, remswitch, mythread, counter(3), swap, &
                                       f_inout1=aux_array( : , swap2 : swap2 ), f_inout2=psi_work(:,start:start) )
                    ! Compute the charge density from the wave functions

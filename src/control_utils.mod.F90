@@ -3733,6 +3733,12 @@ CONTAINS
                 ELSE
                    cntl%old_cp_ordering=.FALSE.
                 ENDIF
+             ELSEIF ( keyword_contains(line,'USE_FFT_DISTMEM') ) THEN
+                IF ( keyword_contains(line,'ON') ) THEN
+                   cntl%fft_distmem=.TRUE.
+                ELSE
+                   cntl%fft_distmem=.FALSE.
+                ENDIF
              ELSEIF ( keyword_contains(line,'BLOCKSIZE_USPP') ) THEN
                 READ(iunit,'(A)',iostat=ierr) line
                 CALL readsi(line,1,last,cnti%blocksize_uspp,erread)

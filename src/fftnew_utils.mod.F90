@@ -57,15 +57,11 @@ MODULE fftnew_utils
   PUBLIC :: addfftnset
   !public :: setrays
   PUBLIC :: fft_new_gdist_batch_setup
-  PUBLIC :: fft_new_gdist_batch_setup2
   PUBLIC :: fft_new_gdist_setup
-  PUBLIC :: fft_new_gdist_setup_noshared
   PUBLIC :: Prep_fft_comm_preinitialized
-  PUBLIC :: Prep_fft_comm_preinitialized2
   PUBLIC :: Make_Manual_Maps
   PUBLIC :: Make_z2y_Maps
   PUBLIC :: Pre_Initialize_C2_Com
-  PUBLIC :: Make_z2y_Maps2
 
   COMPLEX(real_8), POINTER, SAVE, CONTIGUOUS :: comm_send(:,:)
   PUBLIC :: comm_send
@@ -710,68 +706,239 @@ CONTAINS
           CALL Make_z2y_Maps( tfft, tfft%map_z2y_wave(:,2), fft_residual, tfft%ir1w, tfft%nsw, tfft%nr1w, tfft%small_chunks(1), tfft%big_chunks(1) )
        END IF
 
-       sendsize     = MAXVAL( tfft%nr3p ) * MAXVAL ( tfft%nsw ) * parai%max_node_nproc * parai%max_node_nproc * fft_batchsize
-       sendsize_rem = MAXVAL( tfft%nr3p ) * MAXVAL ( tfft%nsw ) * parai%max_node_nproc * parai%max_node_nproc * fft_residual
-       sendsize_pot = MAXVAL( tfft%nr3p ) * MAXVAL(  tfft%nsp ) * parai%max_node_nproc * parai%max_node_nproc
+       IF( cntl%fft_distmem ) THEN
 
-       !IF( parai%me .eq. 0 ) WRITE(6,'(A15,2X,I10,4X,A10,2X,I4,4X,A16,2X,I10)') "SINGLE SENDSIZE", sendsize/fft_batchsize, "BATCHSIZE", fft_batchsize, "BATCHED SENDSIZE", sendsize
+          sendsize     = MAXVAL( tfft%nr3p ) * MAXVAL ( tfft%nsw ) * fft_batchsize
+          sendsize_rem = MAXVAL( tfft%nr3p ) * MAXVAL ( tfft%nsw ) * fft_residual
+          sendsize_pot = MAXVAL( tfft%nr3p ) * MAXVAL(  tfft%nsp )
+          !IF( parai%me .eq. 0 ) WRITE(6,'(A15,2X,I10,4X,A10,2X,I4,4X,A16,2X,I10)') "SINGLE SENDSIZE", sendsize/fft_batchsize, "BATCHSIZE", fft_batchsize, "BATCHED SENDSIZE", sendsize
 
-       DO irun = 1, 2
-
-          IF( irun .eq. 2 ) CALL mp_win_alloc_shared_mem( 'c', needed_size(4), 1, baseptr, parai%node_nproc, parai%node_me, parai%node_grp )
-
-
-          arrayshape(1,1) = MAX( sendsize*parai%nnode, sendsize_pot*parai%nnode )
+          arrayshape(1,1) = MAX( sendsize*parai%cp_nproc, sendsize_pot*parai%cp_nproc )
           arrayshape(2,1) = fft_numbuff
           arrayshape(3,1) = 2
-          needed_size(1) = MAX( arrayshape(1,1) * arrayshape(2,1) * arrayshape(3,1), sendsize_pot*parai%nnode * 2 )
-          IF( irun .eq. 2 ) THEN
-             CALL C_F_POINTER( baseptr(0), Big_Com_Pointer, arrayshape(:,1) )
-             comm_send => Big_Com_Pointer(:,:,1)
-             comm_recv => Big_Com_Pointer(:,:,2)
+          IF( associated( Big_Com_Pointer ) ) DEALLOCATE( Big_Com_Pointer )
+          ALLOCATE( Big_Com_Pointer( arrayshape(1,1), arrayshape(2,1), arrayshape(3,1) ) )
+          comm_send => Big_Com_Pointer(:,:,1)
+          comm_recv => Big_Com_Pointer(:,:,2)
 
-             CALL Prep_fft_comm_preinitialized( comm_send, comm_recv, sendsize, sendsize_rem, parai%nnode, parai%me, parai%my_node, parai%node_me, &
-                                parai%node_nproc, parai%max_node_nproc, parai%cp_overview, fft_numbuff, tfft%comm_sendrecv(:,1), tfft%do_comm(1), 1 )
-             CALL Prep_fft_comm_preinitialized( comm_send, comm_recv, sendsize_pot, 0, parai%nnode, parai%me, parai%my_node, parai%node_me, &
-                                parai%node_nproc, parai%max_node_nproc, parai%cp_overview, 1, tfft%comm_sendrecv(:,2), tfft%do_comm(2), 2 )
+          CALL Prep_fft_comm_preinitialized( comm_send, comm_recv, sendsize, sendsize_rem, parai%nnode, parai%me, parai%my_node, parai%node_me, &
+                             parai%node_nproc, parai%max_node_nproc, parai%cp_overview, fft_numbuff, tfft%comm_sendrecv(:,1), tfft%do_comm(1), 1 )
+          CALL Prep_fft_comm_preinitialized( comm_send, comm_recv, sendsize_pot, 0, parai%nnode, parai%me, parai%my_node, parai%node_me, &
+                             parai%node_nproc, parai%max_node_nproc, parai%cp_overview, 1, tfft%comm_sendrecv(:,2), tfft%do_comm(2), 2 )
+
+          IF( allocated( locks_cc_invfw ) ) DEALLOCATE( locks_cc_invfw )
+          ALLOCATE( locks_cc_invfw( ( nstate / fft_batchsize ) + 1, 4 ) )
+
+       ELSE
+
+          sendsize     = MAXVAL( tfft%nr3p ) * MAXVAL ( tfft%nsw ) * parai%max_node_nproc * parai%max_node_nproc * fft_batchsize
+          sendsize_rem = MAXVAL( tfft%nr3p ) * MAXVAL ( tfft%nsw ) * parai%max_node_nproc * parai%max_node_nproc * fft_residual
+          sendsize_pot = MAXVAL( tfft%nr3p ) * MAXVAL(  tfft%nsp ) * parai%max_node_nproc * parai%max_node_nproc
+          !IF( parai%me .eq. 0 ) WRITE(6,'(A15,2X,I10,4X,A10,2X,I4,4X,A16,2X,I10)') "SINGLE SENDSIZE", sendsize/fft_batchsize, "BATCHSIZE", fft_batchsize, "BATCHED SENDSIZE", sendsize
+
+          DO irun = 1, 2
+   
+             IF( irun .eq. 2 ) CALL mp_win_alloc_shared_mem( 'c', needed_size(4), 1, baseptr, parai%node_nproc, parai%node_me, parai%node_grp )
+   
+   
+             arrayshape(1,1) = MAX( sendsize*parai%nnode, sendsize_pot*parai%nnode )
+             arrayshape(2,1) = fft_numbuff
+             arrayshape(3,1) = 2
+             needed_size(1) = MAX( arrayshape(1,1) * arrayshape(2,1) * arrayshape(3,1), sendsize_pot*parai%nnode * 2 )
+             IF( irun .eq. 2 ) THEN
+                CALL C_F_POINTER( baseptr(0), Big_Com_Pointer, arrayshape(:,1) )
+                comm_send => Big_Com_Pointer(:,:,1)
+                comm_recv => Big_Com_Pointer(:,:,2)
+   
+                CALL Prep_fft_comm_preinitialized( comm_send, comm_recv, sendsize, sendsize_rem, parai%nnode, parai%me, parai%my_node, parai%node_me, &
+                                   parai%node_nproc, parai%max_node_nproc, parai%cp_overview, fft_numbuff, tfft%comm_sendrecv(:,1), tfft%do_comm(1), 1 )
+                CALL Prep_fft_comm_preinitialized( comm_send, comm_recv, sendsize_pot, 0, parai%nnode, parai%me, parai%my_node, parai%node_me, &
+                                   parai%node_nproc, parai%max_node_nproc, parai%cp_overview, 1, tfft%comm_sendrecv(:,2), tfft%do_comm(2), 2 )
+             END IF
+   
+             Com_in_locks = ( needed_size(1) / REAL( ( parai%node_nproc * ( ( nstate / fft_batchsize ) + 1 ) ) / 4.0 ) ) + 1
+             arrayshape(1,2) = parai%node_nproc
+             arrayshape(2,2) = ( nstate / fft_batchsize ) + 1
+             arrayshape(3,2) = Com_in_locks + 4
+             needed_size(2) = ( arrayshape(1,2) * arrayshape(2,2) * arrayshape(3,2) / 4 ) + 1
+             IF( irun .eq. 2. ) THEN
+                CALL C_F_POINTER( baseptr(0), Big_1Log_Pointer, arrayshape(:,2) )
+                locks_calc_inv => Big_1Log_Pointer(:,:,Com_in_locks+1)
+                locks_calc_fw  => Big_1Log_Pointer(:,:,Com_in_locks+2)
+                locks_com_inv  => Big_1Log_Pointer(:,:,Com_in_locks+3)
+                locks_com_fw   => Big_1Log_Pointer(:,:,Com_in_locks+4)
+             END IF
+   
+             Com_in_locks = ( needed_size(2) / REAL( ( parai%node_nproc * ( nstate + fft_batchsize + (fft_numbuff-1)*fft_batchsize ) ) / 4.0 ) ) + 1
+             arrayshape(1,3) = parai%node_nproc
+             arrayshape(2,3) = nstate + fft_batchsize + (fft_numbuff-1)*fft_batchsize
+             arrayshape(3,3) = Com_in_locks + 2
+             needed_size(3) = ( arrayshape(1,3) * arrayshape(2,3) * arrayshape(3,3) / 4 ) + 1
+             IF( irun .eq. 2 ) THEN
+                CALL C_F_POINTER( baseptr(0), Big_2Log_Pointer, arrayshape(:,3) )
+                locks_calc_1   => Big_2Log_Pointer(:,:,Com_in_locks+1)
+                locks_calc_2   => Big_2Log_Pointer(:,:,Com_in_locks+2)
+             END IF
+   
+             Com_in_locks = ( needed_size(3) / REAL( ( parai%node_nproc * ( fft_numbatches + 3 ) ) / 4.0 ) ) + 1
+             arrayshape(1,4) = parai%node_nproc
+             arrayshape(2,4) = fft_numbatches + 4
+             arrayshape(3,4) = Com_in_locks + 2
+             needed_size(4) = ( arrayshape(1,4) * arrayshape(2,4) * arrayshape(3,4) / 4 ) + 1
+             IF( irun .eq. 2 ) THEN
+                CALL C_F_POINTER( baseptr(0), Big_3Log_Pointer, arrayshape(:,4) )
+                locks_sing_1   => Big_3Log_Pointer(:,:,Com_in_locks+1)
+                locks_sing_2   => Big_3Log_Pointer(:,:,Com_in_locks+2)
+             END IF
+   
+          ENDDO
+   
+          IF( DEBUG_shared_mem ) THEN
+   
+             IF( parai%me .eq. 0 ) THEN
+   
+                write(6,*) "*********************************************"
+                write(6,*) "DEBUG SHARED MEMORY OUTPUT"
+                write(6,*) "---------------------------------------------"
+                write(6,*) "COM_SEND / COM_RECV"
+                write(6,'(A7,23X,I16)') "DIM 1: ", arrayshape(1,1)
+                write(6,'(A7,23X,I16)') "DIM 2: ", arrayshape(2,1)
+                write(6,'(A7,23X,I16)') "DIM 3: ", arrayshape(3,1)
+                write(6,'(A18,12X,I16)') "WAVE SIZE NEEDED: ", arrayshape(1,1) * arrayshape(2,1) * arrayshape(3,1)
+                write(6,'(A23,7X,I16)') "POTENTIAL SIZE NEEDED: ", sendsize_pot*parai%nnode * 2
+                write(6,'(A15,15X,I16)') "SIZE RESERVED: ", needed_size(1)
+                write(6,*) "---------------------------------------------"
+                write(6,*) "CALC / COM LOCKS"
+                write(6,'(A7,23X,I16)') "DIM 1: ", arrayshape(1,2)
+                write(6,'(A7,23X,I16)') "DIM 2: ", arrayshape(2,2)
+                write(6,'(A7,23X,15X,A1)') "DIM 3: ", "4"
+                write(6,'(A26,4X,I16)') "SIZE NEEDED (IN LOGICAL): ", arrayshape(1,2) * arrayshape(2,2) * 4
+                write(6,'(A26,4X,I16)') "SIZE NEEDED (IN COMPLEX): ", arrayshape(1,2) * arrayshape(2,2)
+                write(6,'(A26,4X,I16)') "PREVIOUS RESERVATION END: ", needed_size(1)
+                write(6,'(A24,6X,I16)') "THIS RESERVATION START: ", ( ( arrayshape(3,2) - 4 ) * arrayshape(1,2) * arrayshape(2,2) ) / 4
+                write(6,'(A22,8X,I16)') "THIS RESERVATION END: ", needed_size(2)
+                write(6,'(A16,14X,I16)') "SIZE DIFFERENZ: ", needed_size(2) - ( ( arrayshape(3,2) - 4 ) * arrayshape(1,2) * arrayshape(2,2) ) / 4
+                write(6,'(A15,15X,I16)') "SIZE RESERVED: ", needed_size(2) - needed_size(1)
+                write(6,*) "---------------------------------------------"
+                write(6,*) "CALC ONLY LOCKS"
+                write(6,'(A7,23X,I16)') "DIM 1: ", arrayshape(1,3)
+                write(6,'(A7,23X,I16)') "DIM 2: ", arrayshape(2,3)
+                write(6,'(A7,23X,15X,A1)') "DIM 3: ", "2"
+                write(6,'(A26,4X,I16)') "SIZE NEEDED (IN LOGICAL): ", arrayshape(1,3) * arrayshape(2,3) * 2
+                write(6,'(A26,4X,I16)') "SIZE NEEDED (IN COMPLEX): ", ( arrayshape(1,3) * arrayshape(2,3) ) / 2
+                write(6,'(A26,4X,I16)') "PREVIOUS RESERVATION END: ", needed_size(2)
+                write(6,'(A24,6X,I16)') "THIS RESERVATION START: ", ( ( arrayshape(3,3) - 2 ) * arrayshape(1,3) * arrayshape(2,3) ) / 4
+                write(6,'(A22,8X,I16)') "THIS RESERVATION END: ", needed_size(3)
+                write(6,'(A16,14X,I16)') "SIZE DIFFERENZ: ", needed_size(3) - ( ( arrayshape(3,3) - 2 ) * arrayshape(1,3) * arrayshape(2,3) ) / 4
+                write(6,'(A15,15X,I16)') "SIZE RESERVED: ", needed_size(3) - needed_size(2)
+                write(6,*) "---------------------------------------------"
+                write(6,*) "SINGLE LOCKS"
+                write(6,'(A7,23X,I16)') "DIM 1: ", arrayshape(1,4)
+                write(6,'(A7,23X,I16)') "DIM 2: ", arrayshape(2,4)
+                write(6,'(A7,23X,15X,A1)') "DIM 3: ", "2"
+                write(6,'(A26,4X,I16)') "SIZE NEEDED (IN LOGICAL): ", arrayshape(1,4) * arrayshape(2,4) * 2
+                write(6,'(A26,4X,I16)') "SIZE NEEDED (IN COMPLEX): ", ( arrayshape(1,4) * arrayshape(2,4) ) / 2
+                write(6,'(A26,4X,I16)') "PREVIOUS RESERVATION END: ", needed_size(3)
+                write(6,'(A24,6X,I16)') "THIS RESERVATION START: ", ( ( arrayshape(3,4) - 2 ) * arrayshape(1,4) * arrayshape(2,4) ) / 4
+                write(6,'(A22,8X,I16)') "THIS RESERVATION END: ", needed_size(4)
+                write(6,'(A16,14X,I16)') "SIZE DIFFERENZ: ", needed_size(4) - ( ( arrayshape(3,4) - 2 ) * arrayshape(1,4) * arrayshape(2,4) ) / 4
+                write(6,'(A15,15X,I16)') "SIZE RESERVED: ", needed_size(4) - needed_size(3)
+                write(6,*) "---------------------------------------------"
+   
+                war = .false.
+   
+                DO i = 1, arrayshape(1,1)
+                   DO j = 1, arrayshape(2,1)
+                      comm_send(i,j) = (1,1)
+                      comm_recv(i,j) = (1,1)
+                   ENDDO
+                ENDDO
+                locks_sing_1 = .true.
+                locks_sing_2 = .true.
+                locks_calc_inv = .true.
+                locks_calc_fw  = .true.
+                locks_com_inv  = .true.
+                locks_com_fw   = .true.
+                locks_calc_1 = .true.
+                locks_calc_2 = .true.
+                DO i = 1, arrayshape(1,1)
+                   DO j = 1, arrayshape(2,1)
+                      IF( REAL(comm_send(i,j)) .lt. 0.9 ) war(1) = .true.
+                      IF( REAL(comm_recv(i,j)) .lt. 0.9 ) war(1) = .true.
+                   ENDDO
+                ENDDO
+   
+                locks_calc_inv = .false.
+                locks_calc_fw  = .false.
+                locks_com_inv  = .false.
+                locks_com_fw   = .false.
+                comm_send = (1,1)
+                comm_recv = (1,1)
+                locks_calc_1 = .true.
+                locks_calc_2 = .true.
+                locks_sing_1 = .true.
+                locks_sing_2 = .true.
+                DO i = 1, arrayshape(1,2)
+                   DO j = 1, arrayshape(2,2)
+                      IF( locks_calc_inv(i,j) ) war(2) = .true.
+                      IF( locks_calc_fw(i,j)  ) war(2) = .true.
+                      IF( locks_com_inv(i,j)  ) war(2) = .true.
+                      IF( locks_com_fw(i,j)   ) war(2) = .true.
+                   ENDDO
+                ENDDO
+   
+                locks_calc_1 = .false.
+                locks_calc_2 = .false.
+                locks_calc_inv = .true.
+                locks_calc_fw  = .true.
+                locks_com_inv  = .true.
+                locks_com_fw   = .true.
+                comm_send = (1,1)
+                comm_recv = (1,1)
+                locks_sing_1 = .true.
+                locks_sing_2 = .true.
+                DO i = 1, arrayshape(1,3)
+                   DO j = 1, arrayshape(2,3)
+                      IF( locks_calc_1(i,j) ) war(3) = .true.
+                      IF( locks_calc_2(i,j) ) war(3) = .true.
+                   ENDDO
+                ENDDO
+   
+                locks_sing_1 = .false.
+                locks_sing_2 = .false.
+                locks_calc_inv = .true.
+                locks_calc_fw  = .true.
+                locks_com_inv  = .true.
+                locks_com_fw   = .true.
+                comm_send = (1,1)
+                comm_recv = (1,1)
+                locks_calc_1 = .true.
+                locks_calc_2 = .true.
+                DO i = 1, arrayshape(1,4)
+                   DO j = 1, arrayshape(2,4)
+                      IF( locks_sing_1(i,j) ) war(4) = .true.
+                      IF( locks_sing_2(i,j) ) war(4) = .true.
+                   ENDDO
+                ENDDO
+   
+                IF( ANY(war) ) THEN
+                   write(6,*) "OVERLAPP CHECKS FAILED"
+                   IF( war(1) ) write(6,*) "COM_SEND / COM_RECV"
+                   IF( war(2) ) write(6,*) "CALC / COM LOCKS"
+                   IF( war(3) ) write(6,*) "CALC ONLY LOCKS"
+                   IF( war(4) ) write(6,*) "SINGLE LOCKS"
+                ELSE
+                   write(6,*) "OVERLAPP CHECKS PASSED"
+                END IF
+                write(6,*) "*********************************************"
+   
+             END IF
+   
+             CALL MPI_BARRIER(parai%allgrp, ierr)
+   
           END IF
 
-          Com_in_locks = ( needed_size(1) / REAL( ( parai%node_nproc * ( ( nstate / fft_batchsize ) + 1 ) ) / 4.0 ) ) + 1
-          arrayshape(1,2) = parai%node_nproc
-          arrayshape(2,2) = ( nstate / fft_batchsize ) + 1
-          arrayshape(3,2) = Com_in_locks + 4
-          needed_size(2) = ( arrayshape(1,2) * arrayshape(2,2) * arrayshape(3,2) / 4 ) + 1
-          IF( irun .eq. 2. ) THEN
-             CALL C_F_POINTER( baseptr(0), Big_1Log_Pointer, arrayshape(:,2) )
-             locks_calc_inv => Big_1Log_Pointer(:,:,Com_in_locks+1)
-             locks_calc_fw  => Big_1Log_Pointer(:,:,Com_in_locks+2)
-             locks_com_inv  => Big_1Log_Pointer(:,:,Com_in_locks+3)
-             locks_com_fw   => Big_1Log_Pointer(:,:,Com_in_locks+4)
-          END IF
-
-          Com_in_locks = ( needed_size(2) / REAL( ( parai%node_nproc * ( nstate + fft_batchsize + (fft_numbuff-1)*fft_batchsize ) ) / 4.0 ) ) + 1
-          arrayshape(1,3) = parai%node_nproc
-          arrayshape(2,3) = nstate + fft_batchsize + (fft_numbuff-1)*fft_batchsize
-          arrayshape(3,3) = Com_in_locks + 2
-          needed_size(3) = ( arrayshape(1,3) * arrayshape(2,3) * arrayshape(3,3) / 4 ) + 1
-          IF( irun .eq. 2 ) THEN
-             CALL C_F_POINTER( baseptr(0), Big_2Log_Pointer, arrayshape(:,3) )
-             locks_calc_1   => Big_2Log_Pointer(:,:,Com_in_locks+1)
-             locks_calc_2   => Big_2Log_Pointer(:,:,Com_in_locks+2)
-          END IF
-
-          Com_in_locks = ( needed_size(3) / REAL( ( parai%node_nproc * ( fft_numbatches + 3 ) ) / 4.0 ) ) + 1
-          arrayshape(1,4) = parai%node_nproc
-          arrayshape(2,4) = fft_numbatches + 4
-          arrayshape(3,4) = Com_in_locks + 2
-          needed_size(4) = ( arrayshape(1,4) * arrayshape(2,4) * arrayshape(3,4) / 4 ) + 1
-          IF( irun .eq. 2 ) THEN
-             CALL C_F_POINTER( baseptr(0), Big_3Log_Pointer, arrayshape(:,4) )
-             locks_sing_1   => Big_3Log_Pointer(:,:,Com_in_locks+1)
-             locks_sing_2   => Big_3Log_Pointer(:,:,Com_in_locks+2)
-          END IF
-
-       ENDDO
+       END IF
 
        IF( allocated( locks_omp ) ) DEALLOCATE( locks_omp )
        ALLOCATE( locks_omp( parai%ncpus_FFT, fft_numbatches+3, 20 ) )
@@ -782,151 +949,6 @@ CONTAINS
        CALL Make_Manual_Maps( tfft, fft_batchsize, fft_residual, tfft%nsw, tfft%nr1w, tfft%ngw, tfft%which, nstate )
 
        first = .true.
-
-       IF( DEBUG_shared_mem ) THEN
-
-          IF( parai%me .eq. 0 ) THEN
-
-             write(6,*) "*********************************************"
-             write(6,*) "DEBUG SHARED MEMORY OUTPUT"
-             write(6,*) "---------------------------------------------"
-             write(6,*) "COM_SEND / COM_RECV"
-             write(6,'(A7,23X,I16)') "DIM 1: ", arrayshape(1,1)
-             write(6,'(A7,23X,I16)') "DIM 2: ", arrayshape(2,1)
-             write(6,'(A7,23X,I16)') "DIM 3: ", arrayshape(3,1)
-             write(6,'(A18,12X,I16)') "WAVE SIZE NEEDED: ", arrayshape(1,1) * arrayshape(2,1) * arrayshape(3,1)
-             write(6,'(A23,7X,I16)') "POTENTIAL SIZE NEEDED: ", sendsize_pot*parai%nnode * 2
-             write(6,'(A15,15X,I16)') "SIZE RESERVED: ", needed_size(1)
-             write(6,*) "---------------------------------------------"
-             write(6,*) "CALC / COM LOCKS"
-             write(6,'(A7,23X,I16)') "DIM 1: ", arrayshape(1,2)
-             write(6,'(A7,23X,I16)') "DIM 2: ", arrayshape(2,2)
-             write(6,'(A7,23X,15X,A1)') "DIM 3: ", "4"
-             write(6,'(A26,4X,I16)') "SIZE NEEDED (IN LOGICAL): ", arrayshape(1,2) * arrayshape(2,2) * 4
-             write(6,'(A26,4X,I16)') "SIZE NEEDED (IN COMPLEX): ", arrayshape(1,2) * arrayshape(2,2)
-             write(6,'(A26,4X,I16)') "PREVIOUS RESERVATION END: ", needed_size(1)
-             write(6,'(A24,6X,I16)') "THIS RESERVATION START: ", ( ( arrayshape(3,2) - 4 ) * arrayshape(1,2) * arrayshape(2,2) ) / 4
-             write(6,'(A22,8X,I16)') "THIS RESERVATION END: ", needed_size(2)
-             write(6,'(A16,14X,I16)') "SIZE DIFFERENZ: ", needed_size(2) - ( ( arrayshape(3,2) - 4 ) * arrayshape(1,2) * arrayshape(2,2) ) / 4
-             write(6,'(A15,15X,I16)') "SIZE RESERVED: ", needed_size(2) - needed_size(1)
-             write(6,*) "---------------------------------------------"
-             write(6,*) "CALC ONLY LOCKS"
-             write(6,'(A7,23X,I16)') "DIM 1: ", arrayshape(1,3)
-             write(6,'(A7,23X,I16)') "DIM 2: ", arrayshape(2,3)
-             write(6,'(A7,23X,15X,A1)') "DIM 3: ", "2"
-             write(6,'(A26,4X,I16)') "SIZE NEEDED (IN LOGICAL): ", arrayshape(1,3) * arrayshape(2,3) * 2
-             write(6,'(A26,4X,I16)') "SIZE NEEDED (IN COMPLEX): ", ( arrayshape(1,3) * arrayshape(2,3) ) / 2
-             write(6,'(A26,4X,I16)') "PREVIOUS RESERVATION END: ", needed_size(2)
-             write(6,'(A24,6X,I16)') "THIS RESERVATION START: ", ( ( arrayshape(3,3) - 2 ) * arrayshape(1,3) * arrayshape(2,3) ) / 4
-             write(6,'(A22,8X,I16)') "THIS RESERVATION END: ", needed_size(3)
-             write(6,'(A16,14X,I16)') "SIZE DIFFERENZ: ", needed_size(3) - ( ( arrayshape(3,3) - 2 ) * arrayshape(1,3) * arrayshape(2,3) ) / 4
-             write(6,'(A15,15X,I16)') "SIZE RESERVED: ", needed_size(3) - needed_size(2)
-             write(6,*) "---------------------------------------------"
-             write(6,*) "SINGLE LOCKS"
-             write(6,'(A7,23X,I16)') "DIM 1: ", arrayshape(1,4)
-             write(6,'(A7,23X,I16)') "DIM 2: ", arrayshape(2,4)
-             write(6,'(A7,23X,15X,A1)') "DIM 3: ", "2"
-             write(6,'(A26,4X,I16)') "SIZE NEEDED (IN LOGICAL): ", arrayshape(1,4) * arrayshape(2,4) * 2
-             write(6,'(A26,4X,I16)') "SIZE NEEDED (IN COMPLEX): ", ( arrayshape(1,4) * arrayshape(2,4) ) / 2
-             write(6,'(A26,4X,I16)') "PREVIOUS RESERVATION END: ", needed_size(3)
-             write(6,'(A24,6X,I16)') "THIS RESERVATION START: ", ( ( arrayshape(3,4) - 2 ) * arrayshape(1,4) * arrayshape(2,4) ) / 4
-             write(6,'(A22,8X,I16)') "THIS RESERVATION END: ", needed_size(4)
-             write(6,'(A16,14X,I16)') "SIZE DIFFERENZ: ", needed_size(4) - ( ( arrayshape(3,4) - 2 ) * arrayshape(1,4) * arrayshape(2,4) ) / 4
-             write(6,'(A15,15X,I16)') "SIZE RESERVED: ", needed_size(4) - needed_size(3)
-             write(6,*) "---------------------------------------------"
-
-             war = .false.
-
-             DO i = 1, arrayshape(1,1)
-                DO j = 1, arrayshape(2,1)
-                   comm_send(i,j) = (1,1)
-                   comm_recv(i,j) = (1,1)
-                ENDDO
-             ENDDO
-             locks_sing_1 = .true.
-             locks_sing_2 = .true.
-             locks_calc_inv = .true.
-             locks_calc_fw  = .true.
-             locks_com_inv  = .true.
-             locks_com_fw   = .true.
-             locks_calc_1 = .true.
-             locks_calc_2 = .true.
-             DO i = 1, arrayshape(1,1)
-                DO j = 1, arrayshape(2,1)
-                   IF( REAL(comm_send(i,j)) .lt. 0.9 ) war(1) = .true.
-                   IF( REAL(comm_recv(i,j)) .lt. 0.9 ) war(1) = .true.
-                ENDDO
-             ENDDO
-
-             locks_calc_inv = .false.
-             locks_calc_fw  = .false.
-             locks_com_inv  = .false.
-             locks_com_fw   = .false.
-             comm_send = (1,1)
-             comm_recv = (1,1)
-             locks_calc_1 = .true.
-             locks_calc_2 = .true.
-             locks_sing_1 = .true.
-             locks_sing_2 = .true.
-             DO i = 1, arrayshape(1,2)
-                DO j = 1, arrayshape(2,2)
-                   IF( locks_calc_inv(i,j) ) war(2) = .true.
-                   IF( locks_calc_fw(i,j)  ) war(2) = .true.
-                   IF( locks_com_inv(i,j)  ) war(2) = .true.
-                   IF( locks_com_fw(i,j)   ) war(2) = .true.
-                ENDDO
-             ENDDO
-
-             locks_calc_1 = .false.
-             locks_calc_2 = .false.
-             locks_calc_inv = .true.
-             locks_calc_fw  = .true.
-             locks_com_inv  = .true.
-             locks_com_fw   = .true.
-             comm_send = (1,1)
-             comm_recv = (1,1)
-             locks_sing_1 = .true.
-             locks_sing_2 = .true.
-             DO i = 1, arrayshape(1,3)
-                DO j = 1, arrayshape(2,3)
-                   IF( locks_calc_1(i,j) ) war(3) = .true.
-                   IF( locks_calc_2(i,j) ) war(3) = .true.
-                ENDDO
-             ENDDO
-
-             locks_sing_1 = .false.
-             locks_sing_2 = .false.
-             locks_calc_inv = .true.
-             locks_calc_fw  = .true.
-             locks_com_inv  = .true.
-             locks_com_fw   = .true.
-             comm_send = (1,1)
-             comm_recv = (1,1)
-             locks_calc_1 = .true.
-             locks_calc_2 = .true.
-             DO i = 1, arrayshape(1,4)
-                DO j = 1, arrayshape(2,4)
-                   IF( locks_sing_1(i,j) ) war(4) = .true.
-                   IF( locks_sing_2(i,j) ) war(4) = .true.
-                ENDDO
-             ENDDO
-
-             IF( ANY(war) ) THEN
-                write(6,*) "OVERLAPP CHECKS FAILED"
-                IF( war(1) ) write(6,*) "COM_SEND / COM_RECV"
-                IF( war(2) ) write(6,*) "CALC / COM LOCKS"
-                IF( war(3) ) write(6,*) "CALC ONLY LOCKS"
-                IF( war(4) ) write(6,*) "SINGLE LOCKS"
-             ELSE
-                write(6,*) "OVERLAPP CHECKS PASSED"
-             END IF
-             write(6,*) "*********************************************"
-
-          END IF
-
-          CALL MPI_BARRIER(parai%allgrp, ierr)
-
-       END IF
 
     END IF
 
@@ -958,14 +980,18 @@ CONTAINS
 
        first = .false.
 
-       sendsize = MAXVAL ( tfft%nr3p ) * MAXVAL( nss ) * parai%max_node_nproc * parai%max_node_nproc
-
-       CALL mp_win_alloc_shared_mem( 'c', sendsize*parai%nnode*2, 1, baseptr, parai%node_nproc, parai%node_me, parai%node_grp )
-
-       arrayshape(1) = sendsize*parai%nnode
        arrayshape(2) = 1
        arrayshape(3) = 2
-       CALL C_F_POINTER( baseptr(0), Big_Pointer, arrayshape )
+       IF( cntl%fft_distmem ) THEN
+          sendsize = MAXVAL ( tfft%nr3p ) * MAXVAL( nss )
+          arrayshape(1) = sendsize*parai%cp_nproc
+          ALLOCATE( Big_Pointer( arrayshape(1), arrayshape(2), arrayshape(3) ) )
+       ELSE   
+          sendsize = MAXVAL ( tfft%nr3p ) * MAXVAL( nss ) * parai%max_node_nproc * parai%max_node_nproc
+          arrayshape(1) = sendsize*parai%nnode
+          CALL mp_win_alloc_shared_mem( 'c', sendsize*parai%nnode*2, 1, baseptr, parai%node_nproc, parai%node_me, parai%node_grp )
+          CALL C_F_POINTER( baseptr(0), Big_Pointer, arrayshape )
+       END IF
        comm_send => Big_Pointer(:,:,1)
        comm_recv => Big_Pointer(:,:,2)
 
@@ -987,136 +1013,7 @@ CONTAINS
 
     END IF
 
-  END SUBROUTINE
-
-  SUBROUTINE fft_new_gdist_setup_noshared( tfft, nss, nr1s, ngs )
-    IMPLICIT NONE
-
-    TYPE(FFT_TYPE_DESCRIPTOR), INTENT(INOUT) :: tfft
-    INTEGER, INTENT(IN) :: ngs
-    INTEGER, INTENT(IN) :: nss(:), nr1s
-
-    INTEGER :: sendsize
-    LOGICAL, SAVE :: first = .true.
-    TYPE(C_PTR) :: baseptr( 0:parai%node_nproc-1 )
-    INTEGER :: arrayshape(3)           
-    COMPLEX(real_8), SAVE, POINTER, CONTIGUOUS   :: Big_Pointer(:,:,:)
-
-    IF( first .and. .not. restart1%rwf ) THEN
-
-       first = .false.
-
-       sendsize = MAXVAL ( tfft%nr3p ) * MAXVAL( nss )
-
-       arrayshape(1) = sendsize*parai%cp_nproc
-       arrayshape(2) = 1
-       arrayshape(3) = 2
-       ALLOCATE( Big_Pointer( arrayshape(1), arrayshape(2), arrayshape(3) ) )
-       comm_send => Big_Pointer(:,:,1)
-       comm_recv => Big_Pointer(:,:,2)
-
-       CALL Prep_fft_comm_preinitialized2( comm_send, comm_recv, sendsize, 0, parai%nnode, parai%me, parai%my_node, parai%node_me, &
-                          parai%node_nproc, parai%max_node_nproc, parai%cp_overview, 1, tfft%comm_sendrecv(:,2), tfft%do_comm(2), 2 )
-
-       CALL Make_Manual_Maps( tfft, 1, 0, nss, nr1s, ngs, tfft%which, 0 )
-
-       IF( .not. allocated( locks_omp ) ) ALLOCATE( locks_omp( parai%ncpus_FFT, 1, 20 ) )
-       !$ locks_omp = .true.
-       IF( .not. allocated( locks_omp_big ) ) ALLOCATE( locks_omp_big( parai%ncpus_FFT, 1, 1, 20 ) )
-       !$ locks_omp_big = .true.
-
-    ELSE IF( first .and. restart1%rwf ) THEN
-
-       first = .false.
-
-       CALL Make_Manual_Maps( tfft, 1, 0, nss, nr1s, ngs, tfft%which, 0 )
-
-    END IF
-
-  END SUBROUTINE
-
-  SUBROUTINE fft_new_gdist_batch_setup2( tfft, nstate, sendsize, sendsize_rem, spin )
-    IMPLICIT NONE
-
-    TYPE(FFT_TYPE_DESCRIPTOR), INTENT(INOUT) :: tfft
-    INTEGER, INTENT(IN)  :: nstate
-    INTEGER, INTENT(OUT) :: sendsize, sendsize_rem
-    INTEGER, ALLOCATABLE, INTENT(INOUT) :: spin(:)
-
-    INTEGER :: ierr, Com_in_locks, sendsize_pot, irun, i, j
-    INTEGER, SAVE :: remember_batch = 0
-    LOGICAL, SAVE :: first, DEBUG_shared_mem = .false.
-    TYPE(C_PTR) :: baseptr( 0:parai%node_nproc-1 )
-    INTEGER :: arrayshape(3,4), needed_size(4)
-    CHARACTER(*), PARAMETER                  :: procedureN = 'Pre_fft_new_gdistribution_setup'
-    COMPLEX(real_8), SAVE, POINTER, CONTIGUOUS   :: Big_Com_Pointer(:,:,:)
-    LOGICAL,         SAVE, POINTER, CONTIGUOUS   :: Big_1Log_Pointer(:,:,:)
-    LOGICAL,         SAVE, POINTER, CONTIGUOUS   :: Big_2Log_Pointer(:,:,:)
-    LOGICAL,         SAVE, POINTER, CONTIGUOUS   :: Big_3Log_Pointer(:,:,:)
-    LOGICAL :: war(4)
-
-    fft_numbuff = 3
-    IF( cntl%krwfn ) fft_numbuff = 2
-    IF( .not. ( cntl%overlapp_comm_comp .and. fft_numbatches .gt. 1 ) ) fft_numbuff = 1
-
-    IF( remember_batch .ne. fft_batchsize ) THEN
-
-       remember_batch = fft_batchsize
-
-       IF( ALLOCATED( tfft%map_z2y_wave ) )        DEALLOCATE( tfft%map_z2y_wave )
-       ALLOCATE( tfft%map_z2y_wave( tfft%my_nr3p * tfft%nr1w * fpar%kr2s * fft_batchsize, 2 ) )
-       CALL Make_z2y_Maps2( tfft, tfft%map_z2y_wave(:,1), fft_batchsize, tfft%ir1w, tfft%nsw, tfft%nr1w, tfft%small_chunks(1), tfft%big_chunks(1), tfft%zero_z2y_start(:,1), tfft%zero_z2y_end(:,1) ) 
-       IF( fft_residual .ne. 0 ) THEN
-          CALL Make_z2y_Maps2( tfft, tfft%map_z2y_wave(:,2), fft_residual, tfft%ir1w, tfft%nsw, tfft%nr1w, tfft%small_chunks(1), tfft%big_chunks(1) )
-       END IF
-
-       sendsize     = MAXVAL( tfft%nr3p ) * MAXVAL ( tfft%nsw ) * fft_batchsize
-       sendsize_rem = MAXVAL( tfft%nr3p ) * MAXVAL ( tfft%nsw ) * fft_residual
-       sendsize_pot = MAXVAL( tfft%nr3p ) * MAXVAL(  tfft%nsp )
-
-       !IF( parai%me .eq. 0 ) WRITE(6,'(A15,2X,I10,4X,A10,2X,I4,4X,A16,2X,I10)') "SINGLE SENDSIZE", sendsize/fft_batchsize, "BATCHSIZE", fft_batchsize, "BATCHED SENDSIZE", sendsize
-
-
-       arrayshape(1,1) = MAX( sendsize*parai%cp_nproc, sendsize_pot*parai%cp_nproc )
-       arrayshape(2,1) = fft_numbuff
-
-       IF( allocated( comm_send2 ) ) DEALLOCATE( comm_send2 )
-       IF( allocated( comm_recv2 ) ) DEALLOCATE( comm_recv2 )
-       ALLOCATE( comm_send2( arrayshape(1,1), arrayshape(2,1) ) )
-       ALLOCATE( comm_recv2( arrayshape(1,1), arrayshape(2,1) ) )
-
-       CALL Prep_fft_comm_preinitialized2( comm_send2, comm_recv2, sendsize, sendsize_rem, parai%nnode, parai%me, parai%my_node, parai%node_me, &
-                          parai%node_nproc, parai%max_node_nproc, parai%cp_overview, fft_numbuff, tfft%comm_sendrecv(:,1), tfft%do_comm(1), 1 )
-
-       CALL Prep_fft_comm_preinitialized2( comm_send2, comm_recv2, sendsize_pot, 0, parai%nnode, parai%me, parai%my_node, parai%node_me, &
-                          parai%node_nproc, parai%max_node_nproc, parai%cp_overview, 1, tfft%comm_sendrecv(:,2), tfft%do_comm(2), 2 )
-
-
-       IF( allocated( locks_cc_invfw ) ) DEALLOCATE( locks_cc_invfw )
-       ALLOCATE( locks_cc_invfw( ( nstate / fft_batchsize ) + 1, 4 ) )
-
-       IF( allocated( locks_omp ) ) DEALLOCATE( locks_omp )
-       ALLOCATE( locks_omp( parai%ncpus_FFT, fft_numbatches+3, 20 ) )
-
-       IF( allocated( locks_omp_big ) ) DEALLOCATE( locks_omp_big )
-       ALLOCATE( locks_omp_big( parai%ncpus_FFT, fft_batchsize, fft_numbatches+3, 20 ) )
-
-       CALL Make_Manual_Maps( tfft, fft_batchsize, fft_residual, tfft%nsw, tfft%nr1w, tfft%ngw, tfft%which, nstate )
-
-       first = .true.
-
-    END IF
-
-    IF( first .or. .not. allocated( spin ) ) THEN
-       IF( allocated( spin ) ) DEALLOCATE( spin )
-       ALLOCATE( spin( 2 ), STAT=ierr )
-       IF(ierr/=0) CALL stopgm(procedureN,'allocation problem', &
-            __LINE__,__FILE__)
-       first = .false.
-    END IF
-
-
-  END SUBROUTINE fft_new_gdist_batch_setup2
+  END SUBROUTINE fft_new_gdist_setup
 
   SUBROUTINE Prep_fft_comm_preinitialized( comm_send, comm_recv, sendsize, sendsize_rem, nodes_numb, mype, my_node, my_node_rank, node_task_size, &
                            max_node_task_size, cp_overview, buffer_size, comm_sendrecv, do_comm, WAVE )
@@ -1135,80 +1032,104 @@ CONTAINS
 
     INTEGER, ALLOCATABLE :: comm_info_send(:,:), comm_info_recv(:,:)
 
-    INTEGER :: i, j, k, l, m, n, p, jter
+    INTEGER :: i, j, k, l, m, n, p, f
     INTEGER :: ierr, eff_nodes, rem, origin_node, target_node
     INTEGER :: save_node, send_node, send_node_task, recv_node, recv_node_task
     INTEGER :: howmany_sending( max_node_task_size, nodes_numb ) , howmany_receiving( max_node_task_size, nodes_numb )
     LOGICAL :: com_done( nodes_numb )
 
-    !Send to every other node but me
-    eff_nodes = nodes_numb - 1
+    IF( .not. cntl%fft_distmem ) THEN
 
-    howmany_sending = 0
-    howmany_receiving = 0
-    IF( my_node_rank .eq. 0 ) THEN
-       !We have eff_nodes-many send and receiv jobs -> distribute among available tasks on node
-       howmany_sending( 1:node_task_size , my_node+1 )   = eff_nodes / node_task_size
-       howmany_receiving( 1:node_task_size , my_node+1 ) = eff_nodes / node_task_size
-       !Distribute Remainder jobs evenly
-       rem = mod( eff_nodes, node_task_size )
-       DO i = 1, rem * 2
-          k = mod( i-1, node_task_size ) + 1
-          IF( i .le. rem ) howmany_sending( k , my_node+1 )   = howmany_sending( k , my_node+1 )   + 1
-          IF( i .gt. rem ) howmany_receiving( k , my_node+1 ) = howmany_receiving( k , my_node+1 ) + 1
-       ENDDO
-    END IF
-    Call mp_sum( howmany_sending  , max_node_task_size*nodes_numb, parai%allgrp )
-    Call mp_sum( howmany_receiving, max_node_task_size*nodes_numb, parai%allgrp )
-
-    ALLOCATE( comm_info_send( MAXVAL( howmany_sending( 1 , : ) ), parai%nproc ) )
-    ALLOCATE( comm_info_recv( MAXVAL( howmany_sending( 1 , : ) ), parai%nproc ) )
-    comm_info_send = 0
-    comm_info_recv = 0
-    comm_sendrecv(1) = howmany_sending  ( my_node_rank+1 , my_node+1 )
-    comm_sendrecv(2) = howmany_receiving( my_node_rank+1 , my_node+1 )
-
-    do_comm = .true.
-    IF( comm_sendrecv(1) .eq. 0 .and. comm_sendrecv(2) .eq. 0 ) do_comm = .false.
-
-    save_node = -1
-    !Sending Allgrp-Rank
-    DO i = 1, parai%nproc
-       send_node      = parai%cp_overview( 4, i )
-       send_node_task = parai%cp_overview( 2, i )
-       IF( save_node .ne. send_node ) com_done = .false.
-       save_node = send_node
-
-  s_l: DO l = 1, howmany_sending( send_node_task+1, send_node+1 )
-
-          !Receiving Allgrp-Rank
-          DO m = 1, parai%nproc
-             recv_node      = parai%cp_overview( 4, m )
-             recv_node_task = parai%cp_overview( 2, m )
-             !Check if same node / nodes already communicated
-             IF( send_node .eq. recv_node .or. com_done( recv_node+1 ) ) CYCLE
-
-             !Check if task has open receiving jobs
-             IF( howmany_receiving( recv_node_task+1 , recv_node+1 ) .ne. 0 ) THEN
-                com_done( recv_node+1 ) = .true.
-                !Remove one receiving job
-                howmany_receiving( recv_node_task+1 , recv_node+1 ) = howmany_receiving( recv_node_task+1 , recv_node+1 ) - 1
-                !Save Sending and Receiving Rank
-                comm_info_send( l , i ) = m
-                DO p = 1, MAXVAL( howmany_sending( 1 , : ) )
-                   IF( comm_info_recv( p , m ) .eq. 0 ) THEN
-                      comm_info_recv( p , m ) = i
-                      EXIT
-                   END IF
-                ENDDO
-                CYCLE s_l
-             END IF
-
+       !Send to every other node but me
+       eff_nodes = nodes_numb - 1
+   
+       howmany_sending = 0
+       howmany_receiving = 0
+       IF( my_node_rank .eq. 0 ) THEN
+          !We have eff_nodes-many send and receiv jobs -> distribute among available tasks on node
+          howmany_sending( 1:node_task_size , my_node+1 )   = eff_nodes / node_task_size
+          howmany_receiving( 1:node_task_size , my_node+1 ) = eff_nodes / node_task_size
+          !Distribute Remainder jobs evenly
+          rem = mod( eff_nodes, node_task_size )
+          DO i = 1, rem * 2
+             k = mod( i-1, node_task_size ) + 1
+             IF( i .le. rem ) howmany_sending( k , my_node+1 )   = howmany_sending( k , my_node+1 )   + 1
+             IF( i .gt. rem ) howmany_receiving( k , my_node+1 ) = howmany_receiving( k , my_node+1 ) + 1
           ENDDO
+       END IF
+       Call mp_sum( howmany_sending  , max_node_task_size*nodes_numb, parai%allgrp )
+       Call mp_sum( howmany_receiving, max_node_task_size*nodes_numb, parai%allgrp )
+   
+       ALLOCATE( comm_info_send( MAXVAL( howmany_sending( 1 , : ) ), parai%nproc ) )
+       ALLOCATE( comm_info_recv( MAXVAL( howmany_sending( 1 , : ) ), parai%nproc ) )
+       comm_info_send = 0
+       comm_info_recv = 0
+       comm_sendrecv(1) = howmany_sending  ( my_node_rank+1 , my_node+1 )
+       comm_sendrecv(2) = howmany_receiving( my_node_rank+1 , my_node+1 )
+   
+       do_comm = .true.
+       IF( comm_sendrecv(1) .eq. 0 .and. comm_sendrecv(2) .eq. 0 ) do_comm = .false.
+   
+       save_node = -1
+       !Sending Allgrp-Rank
+       DO i = 1, parai%nproc
+          send_node      = parai%cp_overview( 4, i )
+          send_node_task = parai%cp_overview( 2, i )
+          IF( save_node .ne. send_node ) com_done = .false.
+          save_node = send_node
+   
+     s_l: DO l = 1, howmany_sending( send_node_task+1, send_node+1 )
+   
+             !Receiving Allgrp-Rank
+             DO m = 1, parai%nproc
+                recv_node      = parai%cp_overview( 4, m )
+                recv_node_task = parai%cp_overview( 2, m )
+                !Check if same node / nodes already communicated
+                IF( send_node .eq. recv_node .or. com_done( recv_node+1 ) ) CYCLE
+   
+                !Check if task has open receiving jobs
+                IF( howmany_receiving( recv_node_task+1 , recv_node+1 ) .ne. 0 ) THEN
+                   com_done( recv_node+1 ) = .true.
+                   !Remove one receiving job
+                   howmany_receiving( recv_node_task+1 , recv_node+1 ) = howmany_receiving( recv_node_task+1 , recv_node+1 ) - 1
+                   !Save Sending and Receiving Rank
+                   comm_info_send( l , i ) = m
+                   DO p = 1, MAXVAL( howmany_sending( 1 , : ) )
+                      IF( comm_info_recv( p , m ) .eq. 0 ) THEN
+                         comm_info_recv( p , m ) = i
+                         EXIT
+                      END IF
+                   ENDDO
+                   CYCLE s_l
+                END IF
+   
+             ENDDO
+   
+          ENDDO s_l
+   
+       ENDDO
 
-       ENDDO s_l
+    ELSE
 
-    ENDDO
+       IF( parai%cp_nproc .gt. 1 ) do_comm = .true.
+       comm_sendrecv(1) = parai%cp_nproc-1
+       comm_sendrecv(2) = parai%cp_nproc-1
+       ALLOCATE( comm_info_send( parai%cp_nproc-1, parai%cp_nproc ) )
+       ALLOCATE( comm_info_recv( parai%cp_nproc-1, parai%cp_nproc ) )
+       f = 0
+       DO j = 1, comm_sendrecv(1)
+          IF( j .eq. mype+1 ) f = f + 1
+          f = f + 1
+          comm_info_send( j , mype+1 ) = f
+       END DO
+       f = 0
+       DO j = 1, comm_sendrecv(2)
+          IF( j .eq. mype+1 ) f = f + 1
+          f = f + 1
+          comm_info_recv( j , mype+1 ) = f
+       END DO
+
+    END IF
 
     !CLR: Do the requests have to be freed before deallocation? Currently not done!
     IF( ALLOCATED( parai%sendrecv_handle ) .and. WAVE .eq. 1 )       DEALLOCATE( parai%sendrecv_handle )
@@ -1217,23 +1138,35 @@ CONTAINS
 
     DO i = 1, buffer_size !INITIALIZE SENDING AND RECEIVING
 
-       DO j = 1, comm_sendrecv( 1 )
+       f = 0
+       DO j = 1, comm_sendrecv(1)
 
-          target_node = parai%cp_overview(4,comm_info_send(j,mype+1))
+          f = f + 1
+          IF( cntl%fft_distmem ) THEN
+             IF( j .eq. mype+1 ) f = f + 1
+             target_node = f-1
+          ELSE
+             target_node = parai%cp_overview(4,comm_info_send(j,mype+1))
+          END IF
 
           CALL mp_send_init_complex( comm_send(:,i), target_node*sendsize, sendsize, comm_info_send( j , mype+1 ) - 1, mype, &
                                      parai%allgrp, parai%sendrecv_handle( j , i, 1, WAVE ) )
 
        ENDDO
 
-       DO j = 1, comm_sendrecv( 2 )
+       f = 0
+       DO j = 1, comm_sendrecv(2)
 
-          jter = comm_sendrecv( 1 ) + j
-
-          origin_node = parai%cp_overview(4,comm_info_recv(j,mype+1))
+          f = f + 1
+          IF( cntl%fft_distmem ) THEN
+             IF( j .eq. mype+1 ) f = f + 1
+             origin_node = f-1
+          ELSE
+             origin_node = parai%cp_overview(4,comm_info_recv(j,mype+1))
+          END IF
 
           CALL mp_recv_init_complex( comm_recv(:,i), origin_node*sendsize, sendsize, comm_info_recv( j , mype+1 ) - 1, &
-                                     parai%allgrp, parai%sendrecv_handle( jter , i, 1, WAVE ) )
+                                     parai%allgrp, parai%sendrecv_handle( comm_sendrecv( 1 ) + j , i, 1, WAVE ) )
 
        ENDDO
 
@@ -1243,23 +1176,35 @@ CONTAINS
 
        DO i = 1, buffer_size !INITIALIZE SENDING AND RECEIVING
 
-          DO j = 1, comm_sendrecv( 1 )
+          f = 0
+          DO j = 1, comm_sendrecv(1)
 
-             target_node = parai%cp_overview(4,comm_info_send(j,mype+1))
+             f = f + 1
+             IF( cntl%fft_distmem ) THEN
+                IF( j .eq. mype+1 ) f = f + 1
+                target_node = f-1
+             ELSE
+                target_node = parai%cp_overview(4,comm_info_send(j,mype+1))
+             END IF
 
              CALL mp_send_init_complex( comm_send(:,i), target_node*sendsize_rem, sendsize_rem, comm_info_send( j , mype+1 ) - 1, mype, &
                                         parai%allgrp, parai%sendrecv_handle( j , i, 2, WAVE ) )
 
           ENDDO
 
-          DO j = 1, comm_sendrecv( 2 )
+          f = 0
+          DO j = 1, comm_sendrecv(2)
 
-             jter = comm_sendrecv( 1 ) + j
-
-             origin_node = parai%cp_overview(4,comm_info_recv(j,mype+1))
+             f = f + 1
+             IF( cntl%fft_distmem ) THEN
+                IF( j .eq. mype+1 ) f = f + 1
+                origin_node = f-1
+             ELSE
+                origin_node = parai%cp_overview(4,comm_info_recv(j,mype+1))
+             END IF
 
              CALL mp_recv_init_complex( comm_recv(:,i), origin_node*sendsize_rem, sendsize_rem, comm_info_recv( j , mype+1 ) - 1, &
-                                        parai%allgrp, parai%sendrecv_handle( jter , i, 2, WAVE ) )
+                                        parai%allgrp, parai%sendrecv_handle( comm_sendrecv( 1 ) + j , i, 2, WAVE ) )
 
           ENDDO
 
@@ -1268,156 +1213,6 @@ CONTAINS
     END IF
 
   END SUBROUTINE Prep_fft_comm_preinitialized
-  ! ==================================================================
-  SUBROUTINE Prep_fft_comm_preinitialized2( comm_send, comm_recv, sendsize, sendsize_rem, nodes_numb, mype, my_node, my_node_rank, node_task_size, &
-                           max_node_task_size, cp_overview, buffer_size, comm_sendrecv, do_comm, WAVE )
-    IMPLICIT NONE
-
-    INTEGER, INTENT(IN)                                 :: sendsize, sendsize_rem, nodes_numb, mype, my_node, my_node_rank, node_task_size, buffer_size, max_node_task_size
-    COMPLEX(real_8), INTENT(IN)                             :: comm_send( : , : )
-    COMPLEX(real_8), INTENT(INOUT)                          :: comm_recv( : , : )
-    INTEGER, INTENT(OUT)                                :: comm_sendrecv( : )
-    INTEGER, INTENT(IN)                                 :: cp_overview( : , : )
-    LOGICAL, INTENT(OUT)                                :: do_comm
-    INTEGER, INTENT(IN)                                 :: WAVE
-
-    LOGICAL, SAVE :: first = .true.
-    INTEGER, SAVE :: buffer_size_save
-
-    INTEGER, ALLOCATABLE :: comm_info_send(:,:), comm_info_recv(:,:)
-
-    INTEGER :: i, j, k, l, m, n, p, jter, f
-    INTEGER :: ierr, eff_nodes, rem, origin_node, target_node
-
-!    !Send to every other node but me
-!    eff_nodes = nodes_numb - 1
-!
-!    howmany_sending = 0
-!    howmany_receiving = 0
-!    IF( my_node_rank .eq. 0 ) THEN
-!       !We have eff_nodes-many send and receiv jobs -> distribute among available tasks on node
-!       howmany_sending( 1:node_task_size , my_node+1 )   = eff_nodes / node_task_size
-!       howmany_receiving( 1:node_task_size , my_node+1 ) = eff_nodes / node_task_size
-!       !Distribute Remainder jobs evenly
-!       rem = mod( eff_nodes, node_task_size )
-!       DO i = 1, rem * 2
-!          k = mod( i-1, node_task_size ) + 1
-!          IF( i .le. rem ) howmany_sending( k , my_node+1 )   = howmany_sending( k , my_node+1 )   + 1
-!          IF( i .gt. rem ) howmany_receiving( k , my_node+1 ) = howmany_receiving( k , my_node+1 ) + 1
-!       ENDDO
-!    END IF
-!    Call mp_sum( howmany_sending  , max_node_task_size*nodes_numb, parai%allgrp )
-!    Call mp_sum( howmany_receiving, max_node_task_size*nodes_numb, parai%allgrp )
-!
-!    ALLOCATE( comm_info_send( MAXVAL( howmany_sending( 1 , : ) ), parai%nproc ) )
-!    ALLOCATE( comm_info_recv( MAXVAL( howmany_sending( 1 , : ) ), parai%nproc ) )
-!    comm_info_send = 0
-!    comm_info_recv = 0
-!    comm_sendrecv(1) = howmany_sending  ( my_node_rank+1 , my_node+1 )
-!    comm_sendrecv(2) = howmany_receiving( my_node_rank+1 , my_node+1 )
-!
-!    do_comm = .true.
-!    IF( comm_sendrecv(1) .eq. 0 .and. comm_sendrecv(2) .eq. 0 ) do_comm = .false.
-!
-!    save_node = -1
-!    !Sending Allgrp-Rank
-!    DO i = 1, parai%nproc
-!       send_node      = parai%cp_overview( 4, i )
-!       send_node_task = parai%cp_overview( 2, i )
-!       IF( save_node .ne. send_node ) com_done = .false.
-!       save_node = send_node
-!
-!  s_l: DO l = 1, howmany_sending( send_node_task+1, send_node+1 )
-!
-!          !Receiving Allgrp-Rank
-!          DO m = 1, parai%nproc
-!             recv_node      = parai%cp_overview( 4, m )
-!             recv_node_task = parai%cp_overview( 2, m )
-!             !Check if same node / nodes already communicated
-!             IF( send_node .eq. recv_node .or. com_done( recv_node+1 ) ) CYCLE
-!
-!             !Check if task has open receiving jobs
-!             IF( howmany_receiving( recv_node_task+1 , recv_node+1 ) .ne. 0 ) THEN
-!                com_done( recv_node+1 ) = .true.
-!                !Remove one receiving job
-!                howmany_receiving( recv_node_task+1 , recv_node+1 ) = howmany_receiving( recv_node_task+1 , recv_node+1 ) - 1
-!                !Save Sending and Receiving Rank
-!                comm_info_send( l , i ) = m
-!                DO p = 1, MAXVAL( howmany_sending( 1 , : ) )
-!                   IF( comm_info_recv( p , m ) .eq. 0 ) THEN
-!                      comm_info_recv( p , m ) = i
-!                      EXIT
-!                   END IF
-!                ENDDO
-!                CYCLE s_l
-!             END IF
-!
-!          ENDDO
-!
-!       ENDDO s_l
-!
-!    ENDDO
-
-    IF( parai%cp_nproc .gt. 1 ) do_comm = .true.
-
-    !CLR: Do the requests have to be freed before deallocation? Currently not done!
-    IF( ALLOCATED( parai%sendrecv_handle2 ) .and. WAVE .eq. 1 )       DEALLOCATE( parai%sendrecv_handle2 )
-
-    IF( .not. ALLOCATED(parai%sendrecv_handle2) ) ALLOCATE( parai%sendrecv_handle2( 2 * (parai%cp_nproc-1), buffer_size, 2, 2 ) )
-
-    DO i = 1, buffer_size !INITIALIZE SENDING AND RECEIVING
-
-       f = 0
-       DO j = 1, parai%cp_nproc
-          IF( j .eq. mype+1 ) CYCLE
-          f = f + 1
-
-          CALL mp_send_init_complex( comm_send(:,i), (j-1)*sendsize, sendsize, j-1, mype, &
-                                     parai%allgrp, parai%sendrecv_handle2( f , i, 1, WAVE ) )
-
-       ENDDO
-
-       f = 0
-       DO j = 1, parai%cp_nproc
-          IF( j .eq. mype+1 ) CYCLE
-          f = f + 1
-
-          CALL mp_recv_init_complex( comm_recv(:,i), (j-1)*sendsize, sendsize, j-1, &
-                                     parai%allgrp, parai%sendrecv_handle2( parai%cp_nproc-1 + f , i, 1, WAVE ) )
-
-       ENDDO
-
-    ENDDO
-
-    IF( sendsize_rem .ne. 0 ) THEN
-
-       DO i = 1, buffer_size !INITIALIZE SENDING AND RECEIVING
-
-          f = 0
-          DO j = 1, parai%cp_nproc
-             IF( j .eq. mype+1 ) CYCLE
-             f = f + 1
-
-             CALL mp_send_init_complex( comm_send(:,i), (j-1)*sendsize_rem, sendsize_rem, j-1, mype, &
-                                        parai%allgrp, parai%sendrecv_handle2( f , i, 2, WAVE ) )
-
-          ENDDO
-
-          f = 0
-          DO j = 1, parai%cp_nproc
-             IF( j .eq. mype+1 ) CYCLE
-             f = f + 1
-
-             CALL mp_recv_init_complex( comm_recv(:,i), (j-1)*sendsize_rem, sendsize_rem, j-1, &
-                                        parai%allgrp, parai%sendrecv_handle2( parai%cp_nproc-1 + f , i, 2, WAVE ) )
-
-          ENDDO
-
-       ENDDO
-
-    END IF
-
-  END SUBROUTINE Prep_fft_comm_preinitialized2
   ! ==================================================================
   SUBROUTINE Make_Manual_Maps( tfft, batch_size, rem_size, nss, nr1s, ngs, which, nstate )
     IMPLICIT NONE
@@ -1665,7 +1460,11 @@ CONTAINS
     DO j = 1, parai%nnode
        DO l = 1, parai%node_nproc_overview( j )
           ip = ip + 1
-          offset = ( parai%node_me*parai%max_node_nproc + (l-1) ) * small_chunks + (j-1) * batch_size * big_chunks
+          IF( cntl%fft_distmem ) THEN
+             offset = (ip-1) * batch_size * small_chunks
+          ELSE
+             offset = ( parai%node_me*parai%max_node_nproc + (l-1) ) * small_chunks + (j-1) * batch_size * big_chunks
+          END IF
           !$omp do
           DO i = 1, nss( ip )
              m = tfft%ismap( i + tfft%iss(ip) ) !number of current pencil
@@ -1712,77 +1511,6 @@ CONTAINS
 
   END SUBROUTINE Make_z2y_Maps
   ! ==================================================================
-  SUBROUTINE Make_z2y_Maps2( tfft, map_z2y, batch_size, ir1s, nss, my_nr1s, small_chunks, big_chunks, zero_start, zero_end )
-    IMPLICIT NONE
-
-    TYPE(FFT_TYPE_DESCRIPTOR), INTENT(INOUT) :: tfft
-    INTEGER, INTENT(IN)  :: batch_size, my_nr1s, small_chunks, big_chunks
-    INTEGER, INTENT(OUT) :: map_z2y(:)
-    INTEGER, INTENT(IN)  :: ir1s(:), nss(:)
-    INTEGER, OPTIONAL, INTENT(OUT) :: zero_start(:), zero_end(:)
-
-    LOGICAL :: l_map( tfft%my_nr3p * my_nr1s * fpar%kr2s )
-    LOGICAL :: first
-    INTEGER :: j, l, i, k
-    INTEGER :: offset, m, m1, m2, ip, pos
-    INTEGER :: ierr
-
-    l_map = .false.
-    map_z2y = 0
-
-    !$omp parallel private( j, l, ip, offset, i, m, m1, m2, pos, k)
-    ip = 0
-    DO j = 1, parai%nnode
-       DO l = 1, parai%node_nproc_overview( j )
-          ip = ip + 1
-          offset = (ip-1) * batch_size * small_chunks
-          !$omp do
-          DO i = 1, nss( ip )
-             m = tfft%ismap( i + tfft%iss(ip) ) !number of current pencil
-             m1 = mod ( m-1, fpar%kr1s ) + 1     !coordinate of pencil
-             m2 = (m-1)/fpar%kr1s + 1            !other coordinate of pencil
-             pos = m2 + ( ir1s(m1) - 1 ) * fpar%kr2s
-             DO k = 1, tfft%my_nr3p
-                l_map( pos ) = .true.
-                map_z2y( pos ) = k + offset + tfft%nr3px * (i-1)
-                pos = pos + fpar%kr2s * my_nr1s
-             ENDDO
-          ENDDO
-          !$omp end do
-       ENDDO
-    ENDDO
-    !$omp end parallel
-
-    IF( present( zero_start ) ) THEN
-
-       zero_start = 0
-       zero_end = fpar%kr2s
-       first = .true.
-
-       DO j = 1, my_nr1s
-          first = .true.
-          DO l = 1, fpar%kr2s
-
-             IF( l_map( (j-1)*fpar%kr2s + l ) .eqv. .true. ) THEN
-                IF( first .eqv. .false. ) THEN
-                   zero_end( j ) = l-1
-                   first = .true.
-                END IF
-             ELSE
-                IF( first .eqv. .true. ) THEN
-                   zero_start( j ) = l
-                   first = .false.
-                END IF
-             END IF
-
-          ENDDO
-       ENDDO
-
-    END IF
-
-  END SUBROUTINE Make_z2y_Maps2
-  ! ==================================================================
-
   SUBROUTINE Pre_Initialize_C2_Com( c2, nstate, las, nstate_local, my_start, c2_com_num, c2_com_recv, fft_batchsize, fft_residual, fft_numbatches, cp_nstates, s4_coms, my_ngw )
     IMPLICIT NONE
 

@@ -707,6 +707,7 @@ CONTAINS
     !CLR OLD(TRUE) : Consecutive tasks are part of alternating CP-groups
     !    NEW(FALSE): Consecutive tasks are part of consecutive CP-groups
     cntl%old_cp_ordering=.FALSE.
+    cntl%fft_distmem=.FALSE.
     RETURN
   END SUBROUTINE control_def
   ! ==================================================================

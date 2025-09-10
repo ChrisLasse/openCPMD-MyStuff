@@ -37,8 +37,6 @@ MODULE fftmain_utils
                                              fftcu_inv_sprs_2
   USE fftnew_utils,                    ONLY: Prep_fft_comm_preinitialized,&
                                              fft_new_gdist_setup,&
-                                             fft_new_gdist_setup_noshared,&
-                                             Prep_fft_comm_preinitialized2,&
                                              comm_send,&
                                              comm_send2,&
                                              comm_recv,&
@@ -906,7 +904,7 @@ CONTAINS
           !$omp flush( locks_cc_invfw )
           !$  END DO
 
-          CALL fft_comm_preinitialized2( tfft, remswitch, work_buffer, 1 )
+          CALL fft_comm_preinitialized( tfft, remswitch, work_buffer, 1 )
 
           !$  locks_cc_invfw( counter, 2 ) = .false.
           !$omp flush( locks_cc_invfw )
@@ -978,7 +976,7 @@ CONTAINS
           !$omp flush( locks_cc_invfw )
           !$  END DO
 
-          CALL fft_comm_preinitialized2( tfft, remswitch, work_buffer, 1 )
+          CALL fft_comm_preinitialized( tfft, remswitch, work_buffer, 1 )
 
           !$  locks_cc_invfw( counter, 4 ) = .false.
           !$omp flush( locks_cc_invfw )
@@ -1045,7 +1043,7 @@ CONTAINS
 
     tfft%which = 2
 
-    CALL fft_new_gdist_setup_noshared( tfft, nss, nr1s, ngs )
+    CALL fft_new_gdist_setup( tfft, nss, nr1s, ngs )
 
     CALL MPI_BARRIER( parai%allgrp, ierr )
     !$ locks_omp = .true.
@@ -1064,7 +1062,7 @@ CONTAINS
        !$OMP barrier
        !$OMP master
           CALL MPI_BARRIER( parai%allgrp, ierr )
-          IF( tfft%do_comm(2) ) CALL fft_comm_preinitialized2( tfft, 1, 1, 2 )
+          IF( tfft%do_comm(2) ) CALL fft_comm_preinitialized( tfft, 1, 1, 2 )
           CALL MPI_BARRIER( parai%allgrp, ierr )
        !$OMP end master
        !$OMP barrier
@@ -1086,7 +1084,7 @@ CONTAINS
        !$OMP barrier
        !$OMP master
           CALL MPI_BARRIER( parai%allgrp, ierr )
-          IF( tfft%do_comm(2) ) CALL fft_comm_preinitialized2( tfft, 1, 1, 2 )
+          IF( tfft%do_comm(2) ) CALL fft_comm_preinitialized( tfft, 1, 1, 2 )
           CALL MPI_BARRIER( parai%allgrp, ierr )
        !$OMP end master
        !$OMP barrier
