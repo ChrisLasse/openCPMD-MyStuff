@@ -70,9 +70,7 @@ MODULE vpsi_utils
                                              fft_new_gdist_batch_setup,&
                                              Pre_Initialize_C2_Com,&
                                              comm_send,&
-                                             comm_send2,&
                                              comm_recv,&
-                                             comm_recv2,&
                                              locks_calc_inv,&
                                              locks_calc_fw,&
                                              locks_com_inv,&
@@ -2148,7 +2146,34 @@ CONTAINS
 
     tfft%which_wave = 2
 
-    locks_cc_invfw = .true.
+    IF( cntl%fft_distmem ) THEN
+       locks_cc_invfw = .true.
+    ELSE
+       locks_cc_invfw(:,:,1) = .true.
+       locks_cc_invfw(:,:,3) = .true.
+       IF( tfft%do_comm(1) ) THEN
+          locks_cc_invfw( parai%node_me+1, :, 2 ) = .true.
+          locks_cc_invfw( parai%node_me+1, :, 4 ) = .true.
+       ELSE
+          locks_cc_invfw( parai%node_me+1, :, 2 ) = .false.
+          locks_cc_invfw( parai%node_me+1, :, 4 ) = .false.
+       END IF
+
+       locks_calc_1   = .true.
+       locks_calc_2   = .true.
+       IF( .not. cntl%krwfn ) THEN
+          DO i = 1, fft_batchsize*fft_numbuff
+             locks_calc_1( : , i ) = .false.
+          ENDDO
+       ELSE
+          DO i = 1, fft_batchsize*fft_numbuff
+             locks_calc_2( : , i ) = .false.
+          ENDDO
+       END IF
+       locks_sing_1   = .true.
+       locks_sing_2   = .true.
+    END IF
+
 
     locks_omp   = .true.
     IF( cntl%overlapp_comm_comp .and. tfft%do_comm(1) ) locks_omp( 1, :, : ) = .false.
@@ -2380,8 +2405,12 @@ CONTAINS
                        !$  locks_omp( mythread+1, counter(4), 1 ) = .false.
                        !$omp flush( locks_omp )
                        !$  IF( parai%ncpus_FFT .eq. 1 .or. .not. ANY( locks_omp( :, counter(4), 1 ) ) ) THEN
-                       !$     locks_cc_invfw( counter(4), 3 ) = .false.
-                       !$omp flush( locks_cc_invfw )
+                       !$     IF( cntl%fft_distmem ) THEN
+                       !$        locks_cc_invfw( 1, counter(4), 3 ) = .false.
+                       !$     ELSE
+                       !$        locks_cc_invfw( parai%node_me+1, counter(4), 3 ) = .false.
+                       !$     END IF
+                       !$omp  flush( locks_cc_invfw )
                        !$  END IF
                     END IF
 
@@ -2391,7 +2420,7 @@ CONTAINS
 
        ENDDO
 
-       IF( parai%cp_nproc .ne. 1 .and. mythread .eq. 0 .and. tfft%do_comm(1) ) THEN
+       IF( .not. tfft%no_comm .and. mythread .eq. 0 .and. tfft%do_comm(1) ) THEN
           IF(ibatch.GT.start_loop1.AND.ibatch.LE.end_loop1)THEN
              IF(ibatch-start_loop1.LE.fft_numbatches)THEN
                 bsize=fft_batchsize
@@ -2408,8 +2437,18 @@ CONTAINS
           END IF
        END IF
 
-       IF( parai%cp_nproc .eq. 1 ) THEN
-          !$OMP Barrier
+       IF( tfft%no_comm .eq. 1 ) THEN
+          IF( cntl%fft_distmem ) THEN
+             !$OMP Barrier
+          ELSE
+             counter(5) = counter(5) + 1
+             !$OMP Barrier
+             IF( mythread .eq. 0 ) locks_sing_2( parai%node_me+1, counter(5) ) = .false.
+             !$omp flush( locks_sing_2 )
+             !$  DO WHILE( ANY(locks_sing_2( :, counter(5) ) ) )
+             !$omp flush( locks_sing_2 )
+             !$  END DO
+          END IF
        END IF
 
        IF ( mythread .ge. 1 .or. .not. cntl%overlapp_comm_comp .or. parai%ncpus_FFT .eq. 1 .or. .not. tfft%do_comm(1) ) THEN

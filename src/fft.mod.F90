@@ -155,6 +155,7 @@ MODULE fft
 
      INTEGER :: which ! 1 -> wave sticks ; 2 -> pot sticks
      INTEGER :: which_wave ! 1 -> rho ; -> 2 -> vpsi
+     LOGICAL :: no_comm
 
      DOUBLE PRECISION :: tscale
 

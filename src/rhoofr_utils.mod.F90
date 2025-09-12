@@ -70,9 +70,7 @@ MODULE rhoofr_utils
   USE fftnew_utils,                    ONLY: setfftn,&
                                              fft_new_gdist_batch_setup,&
                                              comm_send,&
-                                             comm_send2,&
                                              comm_recv,&
-                                             comm_recv2,&
                                              locks_calc_inv,&
                                              locks_calc_fw,&
                                              locks_com_inv,&
@@ -1440,7 +1438,22 @@ CONTAINS
     END IF
     tfft%which_wave = 1
 
-    locks_cc_invfw = .true.
+    IF( cntl%fft_distmem ) THEN
+       locks_cc_invfw = .true.
+    ELSE
+       locks_cc_invfw(:,:,1) = .true.
+       IF( tfft%do_comm(1) ) THEN
+          locks_cc_invfw( parai%node_me+1, :, 2 ) = .true.
+       ELSE
+          locks_cc_invfw( parai%node_me+1, :, 2 ) = .false.
+       END IF
+
+       locks_calc_1   = .true.
+       DO i = 1, fft_batchsize*fft_numbuff
+          locks_calc_1( : , i ) = .false.
+       ENDDO
+       locks_sing_1   = .true.
+    END IF
 
     locks_omp   = .true.
     IF( cntl%overlapp_comm_comp .and. tfft%do_comm(1) ) locks_omp( 1, :, : ) = .false.
@@ -1540,7 +1553,7 @@ CONTAINS
              END IF
           END IF
        END IF
-       IF( parai%cp_nproc .ne. 1 .and. mythread .eq. 0 .and. tfft%do_comm(1) ) THEN
+       IF( .not. tfft%no_comm .and. mythread .eq. 0 .and. tfft%do_comm(1) ) THEN
           !process batches starting from ibatch .eq. 1 until ibatch .eq. fft_numbatches+1
           !communication phase
           IF(ibatch.LE.fft_numbatches+1)THEN
@@ -1559,8 +1572,18 @@ CONTAINS
           END IF
        END IF
 
-       IF( parai%cp_nproc .eq. 1 ) THEN
-          !$OMP Barrier
+       IF( tfft%no_comm .eq. 1 ) THEN
+          IF( cntl%fft_distmem ) THEN
+             !$OMP Barrier
+          ELSE
+             counter(2) = counter(2) + 1
+             !$OMP Barrier
+             IF( mythread .eq. 0 ) locks_sing_1( parai%node_me+1, counter(2) ) = .false.
+             !$omp flush( locks_sing_1 )
+             !$  DO WHILE( ANY(locks_sing_1( :, counter(2) ) ) )
+             !$omp flush( locks_sing_1 )
+             !$  END DO
+          END IF
        END IF
 
        DO ispec = 1, fft_batchsize

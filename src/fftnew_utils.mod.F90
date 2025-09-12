@@ -67,10 +67,6 @@ MODULE fftnew_utils
   PUBLIC :: comm_send
   COMPLEX(real_8), POINTER, SAVE, CONTIGUOUS :: comm_recv(:,:)
   PUBLIC :: comm_recv
-  COMPLEX(real_8), ALLOCATABLE, SAVE, ASYNCHRONOUS :: comm_send2(:,:)
-  PUBLIC :: comm_send2
-  COMPLEX(real_8), ALLOCATABLE, SAVE, ASYNCHRONOUS :: comm_recv2(:,:)
-  PUBLIC :: comm_recv2
   LOGICAL, POINTER, SAVE, CONTIGUOUS :: locks_calc_inv(:,:)
   PUBLIC :: locks_calc_inv
   LOGICAL, POINTER, SAVE, CONTIGUOUS :: locks_com_inv(:,:)
@@ -83,7 +79,7 @@ MODULE fftnew_utils
   PUBLIC :: locks_sing_1
   LOGICAL, POINTER, SAVE, CONTIGUOUS :: locks_sing_2(:,:)
   PUBLIC :: locks_sing_2
-  LOGICAL, ALLOCATABLE, SAVE :: locks_cc_invfw(:,:)
+  LOGICAL, POINTER, SAVE, CONTIGUOUS :: locks_cc_invfw(:,:,:)
   PUBLIC :: locks_cc_invfw
   LOGICAL, ALLOCATABLE, SAVE :: locks_omp(:,:,:)
   PUBLIC :: locks_omp
@@ -726,8 +722,8 @@ CONTAINS
           CALL Prep_fft_comm_preinitialized( comm_send, comm_recv, sendsize_pot, 0, parai%nnode, parai%me, parai%my_node, parai%node_me, &
                              parai%node_nproc, parai%max_node_nproc, parai%cp_overview, 1, tfft%comm_sendrecv(:,2), tfft%do_comm(2), 2 )
 
-          IF( allocated( locks_cc_invfw ) ) DEALLOCATE( locks_cc_invfw )
-          ALLOCATE( locks_cc_invfw( ( nstate / fft_batchsize ) + 1, 4 ) )
+          IF( associated( locks_cc_invfw ) ) DEALLOCATE( locks_cc_invfw )
+          ALLOCATE( locks_cc_invfw( 1, ( nstate / fft_batchsize ) + 1, 4 ) )
 
        ELSE
 
@@ -763,10 +759,10 @@ CONTAINS
              needed_size(2) = ( arrayshape(1,2) * arrayshape(2,2) * arrayshape(3,2) / 4 ) + 1
              IF( irun .eq. 2. ) THEN
                 CALL C_F_POINTER( baseptr(0), Big_1Log_Pointer, arrayshape(:,2) )
-                locks_calc_inv => Big_1Log_Pointer(:,:,Com_in_locks+1)
-                locks_calc_fw  => Big_1Log_Pointer(:,:,Com_in_locks+2)
-                locks_com_inv  => Big_1Log_Pointer(:,:,Com_in_locks+3)
-                locks_com_fw   => Big_1Log_Pointer(:,:,Com_in_locks+4)
+                locks_cc_invfw => Big_1Log_Pointer(:,:,Com_in_locks+1:Com_in_locks+4)
+!                locks_cc_invfw(:,:,2) => Big_1Log_Pointer(:,:,Com_in_locks+2)
+!                locks_cc_invfw(:,:,3) => Big_1Log_Pointer(:,:,Com_in_locks+3)
+!                locks_cc_invfw(:,:,4) => Big_1Log_Pointer(:,:,Com_in_locks+4)
              END IF
    
              Com_in_locks = ( needed_size(2) / REAL( ( parai%node_nproc * ( nstate + fft_batchsize + (fft_numbuff-1)*fft_batchsize ) ) / 4.0 ) ) + 1
