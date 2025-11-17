@@ -67,6 +67,7 @@ MODULE fftmain_utils
                                              unpack_y2x,&
                                              unpack_y2x_n,&
                                              fft_comm_preinitialized,&
+                                             fft_comm_ALL2ALL,&
                                              invfft_z_section,&
                                              invfft_y_section,&
                                              invfft_x_section,&
@@ -867,7 +868,7 @@ CONTAINS
 
     CHARACTER(*), PARAMETER :: procedureN = 'fft_new_gdist_batch'
 
-    INTEGER :: current, isub, isub4, ierr
+    INTEGER :: current, isub, isub4, ierr, sendsize
 
     IF( cntl%fft_tune_batchsize ) THEN
        IF( parai%ncpus_FFT .eq. 1 .or. mythread .eq. 1 ) CALL tiset(procedureN//'_tuning',isub4)
@@ -876,6 +877,8 @@ CONTAINS
     END IF
 
     current = (counter-1)*fft_batchsize
+
+    sendsize = MAXVAL( tfft%nr3p ) * MAXVAL ( tfft%nsw ) * batch_size
 
     IF( isign .eq. -1 ) THEN !!  invfft
 
@@ -901,7 +904,8 @@ CONTAINS
           !$omp flush( locks_cc_invfw )
           !$  END DO
 
-          CALL fft_comm_preinitialized( tfft, remswitch, work_buffer, 1 )
+!          CALL fft_comm_preinitialized( tfft, remswitch, work_buffer, 1 )
+          CALL fft_comm_ALL2ALL( tfft, remswitch, work_buffer, 1, comm_send2(:,work_buffer), comm_recv2(:,work_buffer), sendsize )
  
           !$  IF( cntl%fft_distmem ) THEN
           !$     locks_cc_invfw( 1, counter, 2 ) = .false.
@@ -983,7 +987,8 @@ CONTAINS
           !$omp flush( locks_cc_invfw )
           !$  END DO
 
-          CALL fft_comm_preinitialized( tfft, remswitch, work_buffer, 1 )
+!          CALL fft_comm_preinitialized( tfft, remswitch, work_buffer, 1 )
+          CALL fft_comm_ALL2ALL( tfft, remswitch, work_buffer, 1, comm_send2(:,work_buffer), comm_recv2(:,work_buffer), sendsize )
 
           !$  IF( cntl%fft_distmem ) THEN
           !$     locks_cc_invfw( 1, counter, 4 ) = .false.
@@ -1041,7 +1046,7 @@ CONTAINS
 #endif
 
     INTEGER(int_8) :: il_aux(2)
-    INTEGER :: i, ierr, isub, mythread
+    INTEGER :: i, ierr, isub, mythread, sendsize
     CHARACTER(*), PARAMETER                  :: procedureN = 'fft_new_gdist'
 
 !    CALL tiset(procedureN,isub)
@@ -1059,6 +1064,7 @@ CONTAINS
 #endif
 
     tfft%which = 2
+    sendsize = MAXVAL ( tfft%nr3p ) * MAXVAL( nss )
 
     CALL fft_new_gdist_setup( tfft, nss, nr1s, ngs )
 
@@ -1079,7 +1085,8 @@ CONTAINS
        !$OMP barrier
        !$OMP master
           CALL MPI_BARRIER( parai%allgrp, ierr )
-          IF( tfft%do_comm(2) ) CALL fft_comm_preinitialized( tfft, 1, 1, 2 )
+!          IF( tfft%do_comm(2) ) CALL fft_comm_preinitialized( tfft, 1, 1, 2 )
+          IF( tfft%do_comm(2) ) CALL fft_comm_ALL2ALL( tfft, 1, 1, 2, comm_send2(:,1), comm_recv2(:,1), sendsize )
           CALL MPI_BARRIER( parai%allgrp, ierr )
        !$OMP end master
        !$OMP barrier
@@ -1101,7 +1108,8 @@ CONTAINS
        !$OMP barrier
        !$OMP master
           CALL MPI_BARRIER( parai%allgrp, ierr )
-          IF( tfft%do_comm(2) ) CALL fft_comm_preinitialized( tfft, 1, 1, 2 )
+!          IF( tfft%do_comm(2) ) CALL fft_comm_preinitialized( tfft, 1, 1, 2 )
+          IF( tfft%do_comm(2) ) CALL fft_comm_ALL2ALL( tfft, 1, 1, 2, comm_send2(:,1), comm_recv2(:,1), sendsize )
           CALL MPI_BARRIER( parai%allgrp, ierr )
        !$OMP end master
        !$OMP barrier

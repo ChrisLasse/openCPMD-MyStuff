@@ -132,7 +132,7 @@ CONTAINS
        DO l = 1, parai%nnode
           DO m = 1, parai%node_nproc_overview( l )
              j = j + 1
-             IF( parai%cp_me+1 .eq. j ) CYCLE
+!             IF( parai%cp_me+1 .eq. j ) CYCLE
              !     ( Where am I on the node + to which proc does it go ) * Package size
              offset = (j-1) * tfft%small_chunks(tfft%which) * batch_size
              DO k = tfft%thread_z_start( mythread+1, remswitch, parai%me+1, tfft%which ), tfft%thread_z_end( mythread+1, remswitch, parai%me+1, tfft%which )
@@ -180,15 +180,30 @@ CONTAINS
     COMPLEX(real_8), INTENT(IN)  :: aux ( fpar%kr3s , * )
     COMPLEX(real_8), INTENT(OUT) :: comm_mem_recv( * )
 
-    INTEGER :: i, k, kdest
+!    INTEGER :: i, k, kdest
+    INTEGER :: j, l, m, offset, i, kdest, k
 
-    DO k = tfft%thread_z_start( mythread+1, remswitch, parai%me+1, tfft%which ), tfft%thread_z_end( mythread+1, remswitch, parai%me+1, tfft%which )
-       kdest = parai%cp_me * tfft%small_chunks(tfft%which) * batch_size + tfft%nr3px * mod( k-1, nss(parai%me+1) ) + ( (k-1) / nss(parai%me+1) ) * tfft%small_chunks(tfft%which)
-       DO i = 1, tfft%nr3p( parai%cp_me+1 )
-          comm_mem_recv( kdest + i ) = aux( i + tfft%nr3p_offset( parai%cp_me+1 ), k )
+!    DO k = tfft%thread_z_start( mythread+1, remswitch, parai%me+1, tfft%which ), tfft%thread_z_end( mythread+1, remswitch, parai%me+1, tfft%which )
+!       kdest = parai%cp_me * tfft%small_chunks(tfft%which) * batch_size + tfft%nr3px * mod( k-1, nss(parai%me+1) ) + ( (k-1) / nss(parai%me+1) ) * tfft%small_chunks(tfft%which)
+!       DO i = 1, tfft%nr3p( parai%cp_me+1 )
+!          comm_mem_recv( kdest + i ) = aux( i + tfft%nr3p_offset( parai%cp_me+1 ), k )
+!       ENDDO
+!    ENDDO
+
+    j = 0
+    DO l = 1, parai%nnode
+       DO m = 1, parai%node_nproc_overview( l )
+          j = j + 1
+          !     ( Where am I on the node + to which proc does it go ) * Package size
+          offset = (j-1) * tfft%small_chunks(tfft%which) * batch_size
+          DO k = tfft%thread_z_start( mythread+1, remswitch, parai%me+1, tfft%which ), tfft%thread_z_end( mythread+1, remswitch, parai%me+1, tfft%which )
+             kdest = offset + tfft%nr3px * mod( (k-1), nss(parai%me+1) ) + ( (k-1) / nss(parai%me+1) ) * tfft%small_chunks(tfft%which)
+             DO i = 1, tfft%nr3p( j )
+                comm_mem_recv( kdest + i ) = aux( i + tfft%nr3p_offset( j ), k )
+             ENDDO
+          ENDDO
        ENDDO
     ENDDO
-
 
   END SUBROUTINE z2y_fillrecv_distmem
 
