@@ -88,6 +88,7 @@ MODULE fftutil_utils
 !CLR special routines for new_gdist FFT
   PUBLIC :: set_psi_new_gdist
   PUBLIC :: fft_comm_preinitialized
+  PUBLIC :: fft_comm_ALL2ALL
   PUBLIC :: invfft_z_section
   PUBLIC :: invfft_y_section
   PUBLIC :: invfft_x_section
@@ -1099,6 +1100,35 @@ CONTAINS
 !    END IF
 
   END SUBROUTINE fft_comm_preinitialized
+
+  SUBROUTINE fft_comm_ALL2ALL( tfft, remswitch, work_buffer, which, comm_send, comm_recv, sendsize )
+    USE mpi_f08
+    IMPLICIT NONE
+
+    INTEGER, INTENT(IN)                         :: remswitch, work_buffer, which, sendsize
+    TYPE(FFT_TYPE_DESCRIPTOR), INTENT(INOUT)    :: tfft
+!    COMPLEX(real_8), INTENT(INOUT)              :: comm_send(*), comm_recv(*)
+    COMPLEX(real_8), INTENT(INOUT)              :: comm_send(:), comm_recv(:)
+
+    CHARACTER(*), PARAMETER :: procedureN = 'fft_comm_ALL2ALL'
+
+    INTEGER :: ierr, isub, isub4
+
+!    IF( cntl%fft_tune_batchsize ) THEN
+!       CALL tiset(procedureN//'_tuning',isub4)
+!    ELSE
+!       CALL tiset(procedureN,isub)
+!    END IF
+
+    CALL MPI_ALLTOALL( comm_send, sendsize, MPI_DOUBLE_COMPLEX, comm_recv, sendsize, MPI_DOUBLE_COMPLEX, parai%allgrp )
+
+!    IF( cntl%fft_tune_batchsize ) THEN
+!       CALL tihalt(procedureN//'_tuning',isub4)
+!    ELSE
+!       CALL tihalt(procedureN,isub)
+!    END IF
+
+  END SUBROUTINE fft_comm_ALL2ALL 
 
   SUBROUTINE invfft_z_section( tfft, aux, comm_mem_send, comm_mem_recv, batch_size, remswitch, mythread, nss, current )
     IMPLICIT NONE

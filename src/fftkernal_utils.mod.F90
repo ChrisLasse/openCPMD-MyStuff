@@ -263,7 +263,7 @@ CONTAINS
        DO l = 1, parai%nnode
           DO m = 1, parai%node_nproc_overview( l )
              i = i + 1
-             IF( parai%cp_me+1 .eq. i ) CYCLE
+!             IF( parai%cp_me+1 .eq. i ) CYCLE
              offset = (i-1) * tfft%small_chunks(tfft%which) * batch_size
              DO j = tfft%thread_z_start( mythread+1, 3, i, tfft%which ), tfft%thread_z_end( mythread+1, 3, i, tfft%which )
                 DO k = 1, tfft%my_nr3p

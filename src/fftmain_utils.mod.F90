@@ -794,7 +794,8 @@ CONTAINS
        CALL fft_new_gdist_batch( tfft, -1, step, batch_size, ispec, remswitch, mythread, counter, work_buffer, &
                                 f_inout1=f_inout1, f_inout2=f_inout2, f_inout3=f_inout3, f_inout4=f_inout4 )
     ELSE IF( step .eq. 2 ) THEN
-       CALL fft_new_gdist_batch( tfft, -1, step, batch_size, ispec, remswitch, mythread, counter, work_buffer )
+       CALL fft_new_gdist_batch( tfft, -1, step, batch_size, ispec, remswitch, mythread, counter, work_buffer, &
+                                f_inout1=f_inout1, f_inout2=f_inout2 )
     ELSE IF( step .eq. 3 ) THEN
        CALL fft_new_gdist_batch( tfft, -1, step, batch_size, ispec, remswitch, mythread, counter, work_buffer, &
                                 f_inout1=f_inout1, f_inout2=f_inout2, f_inout3=f_inout3, f_inout4=f_inout4 )
@@ -840,7 +841,8 @@ CONTAINS
        CALL fft_new_gdist_batch( tfft, 1, step, batch_size, ispec, remswitch, mythread, counter, work_buffer, &
                                 f_inout1=f_inout1, f_inout2=f_inout2, f_inout3=f_inout3, f_inout4=f_inout4 )
     ELSE IF( step .eq. 3 ) THEN
-       CALL fft_new_gdist_batch( tfft, 1, step, batch_size, ispec, remswitch, mythread, counter, work_buffer )
+       CALL fft_new_gdist_batch( tfft, 1, step, batch_size, ispec, remswitch, mythread, counter, work_buffer, &
+                                f_inout1=f_inout1, f_inout2=f_inout2 )
     ELSE IF( step .eq. 4 ) THEN
        CALL fft_new_gdist_batch( tfft, 1, step, batch_size, ispec, remswitch, mythread, counter, work_buffer, &
                                 f_inout1=f_inout1, f_inout2=f_inout2, f_inout3=f_inout3, f_inout4=f_inout4 )
@@ -905,7 +907,7 @@ CONTAINS
           !$  END DO
 
 !          CALL fft_comm_preinitialized( tfft, remswitch, work_buffer, 1 )
-          CALL fft_comm_ALL2ALL( tfft, remswitch, work_buffer, 1, comm_send2(:,work_buffer), comm_recv2(:,work_buffer), sendsize )
+          CALL fft_comm_ALL2ALL( tfft, remswitch, work_buffer, 1, f_inout1(:,work_buffer), f_inout2(:,work_buffer), sendsize )
  
           !$  IF( cntl%fft_distmem ) THEN
           !$     locks_cc_invfw( 1, counter, 2 ) = .false.
@@ -988,7 +990,7 @@ CONTAINS
           !$  END DO
 
 !          CALL fft_comm_preinitialized( tfft, remswitch, work_buffer, 1 )
-          CALL fft_comm_ALL2ALL( tfft, remswitch, work_buffer, 1, comm_send2(:,work_buffer), comm_recv2(:,work_buffer), sendsize )
+          CALL fft_comm_ALL2ALL( tfft, remswitch, work_buffer, 1, f_inout1(:,work_buffer), f_inout2(:,work_buffer), sendsize )
 
           !$  IF( cntl%fft_distmem ) THEN
           !$     locks_cc_invfw( 1, counter, 4 ) = .false.
@@ -1086,7 +1088,7 @@ CONTAINS
        !$OMP master
           CALL MPI_BARRIER( parai%allgrp, ierr )
 !          IF( tfft%do_comm(2) ) CALL fft_comm_preinitialized( tfft, 1, 1, 2 )
-          IF( tfft%do_comm(2) ) CALL fft_comm_ALL2ALL( tfft, 1, 1, 2, comm_send2(:,1), comm_recv2(:,1), sendsize )
+          IF( tfft%do_comm(2) ) CALL fft_comm_ALL2ALL( tfft, 1, 1, 2, comm_send(:,1), comm_recv(:,1), sendsize )
           CALL MPI_BARRIER( parai%allgrp, ierr )
        !$OMP end master
        !$OMP barrier
@@ -1109,7 +1111,7 @@ CONTAINS
        !$OMP master
           CALL MPI_BARRIER( parai%allgrp, ierr )
 !          IF( tfft%do_comm(2) ) CALL fft_comm_preinitialized( tfft, 1, 1, 2 )
-          IF( tfft%do_comm(2) ) CALL fft_comm_ALL2ALL( tfft, 1, 1, 2, comm_send2(:,1), comm_recv2(:,1), sendsize )
+          IF( tfft%do_comm(2) ) CALL fft_comm_ALL2ALL( tfft, 1, 1, 2, comm_send(:,1), comm_recv(:,1), sendsize )
           CALL MPI_BARRIER( parai%allgrp, ierr )
        !$OMP end master
        !$OMP barrier

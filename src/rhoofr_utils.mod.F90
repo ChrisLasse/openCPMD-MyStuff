@@ -1567,7 +1567,7 @@ CONTAINS
              IF(bsize.NE.0)THEN
                 swap=mod(ibatch,fft_numbuff)+1
                 counter(2) = counter(2) + 1
-                CALL invfft_new_gdist_batch( tfft, 2, bsize, 1, remswitch, mythread, counter(2), swap )
+                CALL invfft_new_gdist_batch( tfft, 2, bsize, 1, remswitch, mythread, counter(2), swap, f_inout1=comm_send, f_inout2=comm_recv )
              END IF
           END IF
        END IF

@@ -2288,7 +2288,7 @@ CONTAINS
                 IF(bsize.NE.0)THEN
                    swap=mod(ibatch,fft_numbuff)+1
                    counter(2) = counter(2) + 1
-                   CALL invfft_new_gdist_batch( tfft, 2, bsize, 1, remswitch, mythread, counter(2), swap )
+                   CALL invfft_new_gdist_batch( tfft, 2, bsize, 1, remswitch, mythread, counter(2), swap, f_inout1=comm_send, f_inout2=comm_recv )
                 END IF
              END IF
           END IF
@@ -2432,7 +2432,7 @@ CONTAINS
              IF(bsize.NE.0)THEN
                 swap=mod(ibatch-start_loop1,fft_numbuff)+1
                 counter(5) = counter(5) + 1
-                CALL fwfft_new_gdist_batch( tfft, 3, bsize, 1, remswitch, mythread, counter(5), swap )
+                CALL fwfft_new_gdist_batch( tfft, 3, bsize, 1, remswitch, mythread, counter(5), swap, f_inout1=comm_send, f_inout2=comm_recv )
              END IF
           END IF
        END IF
