@@ -697,7 +697,7 @@ CONTAINS
 
        IF( ALLOCATED( tfft%map_z2y_wave ) )        DEALLOCATE( tfft%map_z2y_wave )
        ALLOCATE( tfft%map_z2y_wave( tfft%my_nr3p * tfft%nr1w * fpar%kr2s * fft_batchsize, 2 ) )
-       CALL Make_z2y_Maps( tfft, tfft%map_z2y_wave(:,1), fft_batchsize, tfft%ir1w, tfft%nsw, tfft%nr1w, tfft%small_chunks(1), tfft%big_chunks(1), tfft%zero_z2y_start(:,1), tfft%zero_z2y_end(:,1) ) 
+       CALL Make_z2y_Maps( tfft, tfft%map_z2y_wave(:,1), fft_batchsize, tfft%ir1w, tfft%nsw, tfft%nr1w, tfft%small_chunks(1), tfft%big_chunks(1), tfft%map_z2y_bounds(:,:,1) ) 
        IF( fft_residual .ne. 0 ) THEN
           CALL Make_z2y_Maps( tfft, tfft%map_z2y_wave(:,2), fft_residual, tfft%ir1w, tfft%nsw, tfft%nr1w, tfft%small_chunks(1), tfft%big_chunks(1) )
        END IF
@@ -1433,17 +1433,17 @@ CONTAINS
 
   END SUBROUTINE Make_Manual_Maps
   ! ==================================================================
-  SUBROUTINE Make_z2y_Maps( tfft, map_z2y, batch_size, ir1s, nss, my_nr1s, small_chunks, big_chunks, zero_start, zero_end )
+  SUBROUTINE Make_z2y_Maps( tfft, map_z2y, batch_size, ir1s, nss, my_nr1s, small_chunks, big_chunks, map_z2y_bounds )
     IMPLICIT NONE
 
     TYPE(FFT_TYPE_DESCRIPTOR), INTENT(INOUT) :: tfft
     INTEGER, INTENT(IN)  :: batch_size, my_nr1s, small_chunks, big_chunks
     INTEGER, INTENT(OUT) :: map_z2y(:)
     INTEGER, INTENT(IN)  :: ir1s(:), nss(:)
-    INTEGER, OPTIONAL, INTENT(OUT) :: zero_start(:), zero_end(:)
+    INTEGER, OPTIONAL, INTENT(OUT) :: map_z2y_bounds(:,:)
 
     LOGICAL :: l_map( tfft%my_nr3p * my_nr1s * fpar%kr2s )
-    LOGICAL :: first
+    LOGICAL :: first, start
     INTEGER :: j, l, i, k
     INTEGER :: offset, m, m1, m2, ip, pos
     INTEGER :: ierr
@@ -1478,30 +1478,75 @@ CONTAINS
     ENDDO
     !$omp end parallel
 
-    IF( present( zero_start ) ) THEN
+    IF( present( map_z2y_bounds ) ) THEN
 
-       zero_start = 0
-       zero_end = fpar%kr2s
-       first = .true.
+       map_z2y_bounds = 0
 
-       DO j = 1, my_nr1s
-          first = .true.
-          DO l = 1, fpar%kr2s
+       !$omp parallel do private( i, start, j, k )
+       DO i = 1, my_nr1s
+          start = .true.
+          k = 1
+          DO j = 1, fpar%kr2s
 
-             IF( l_map( (j-1)*fpar%kr2s + l ) .eqv. .true. ) THEN
-                IF( first .eqv. .false. ) THEN
-                   zero_end( j ) = l-1
-                   first = .true.
+             IF( j .eq. 1 ) THEN
+                IF( l_map( (i-1)*fpar%kr2s + j ) .eqv. .true. ) THEN
+                   k = k + 1
+                END IF
+             END IF
+             IF( l_map( (i-1)*fpar%kr2s + j ) .eqv. .false. ) THEN
+                IF( start .eqv. .true. ) THEN
+                   map_z2y_bounds(i,2*k-1) = j
+                   start = .false.
                 END IF
              ELSE
-                IF( first .eqv. .true. ) THEN
-                   zero_start( j ) = l
-                   first = .false.
+                IF( start .eqv. .false. ) THEN
+                   map_z2y_bounds(i,2*k) = j
+                   k = k + 1
+                   start = .true.
+                END IF
+             END IF
+             IF( j .eq. fpar%kr2s ) THEN
+                IF( start .eqv. .false. ) THEN
+                   map_z2y_bounds(i,2*k) = j + 1
                 END IF
              END IF
 
           ENDDO
        ENDDO
+       !$omp end parallel do
+
+       !$omp parallel do private( i, start, j, k )
+       DO i = 1, my_nr1s
+          start = .true.
+          k = 3
+          DO j = 1, fpar%kr2s
+
+             IF( j .eq. 1 ) THEN
+                IF( l_map( (i-1)*fpar%kr2s + j ) .eqv. .false. ) THEN
+                   k = k + 1
+                END IF
+             END IF
+             IF( l_map( (i-1)*fpar%kr2s + j ) .eqv. .true. ) THEN
+                IF( start .eqv. .true. ) THEN
+                   map_z2y_bounds(i,2*k-1) = j
+                   start = .false.
+                END IF
+             ELSE
+                IF( start .eqv. .false. ) THEN
+                   map_z2y_bounds(i,2*k) = j
+                   k = k + 1
+                   start = .true.
+                END IF
+             END IF
+             IF( j .eq. fpar%kr2s ) THEN
+                IF( start .eqv. .false. ) THEN
+                   map_z2y_bounds(i,2*k) = j + 1
+                END IF
+             END IF
+
+          ENDDO
+       ENDDO
+       !$omp end parallel do
 
     END IF
 

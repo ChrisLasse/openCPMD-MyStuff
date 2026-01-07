@@ -1572,7 +1572,7 @@ CONTAINS
           END IF
        END IF
 
-       IF( tfft%no_comm .eq. 1 ) THEN
+       IF( tfft%no_comm ) THEN
           IF( cntl%fft_distmem ) THEN
              !$OMP Barrier
           ELSE

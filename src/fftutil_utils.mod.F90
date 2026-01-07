@@ -991,22 +991,28 @@ CONTAINS
           offset  = ( iter - 1 ) * fpar%kr3s
           offset2 = 2 * ( ( (i-1) / tfft%nsw(parai%me+1) ) + 1 )
 
-          DO j = 1, tfft%map_set_psi(1,iter)-1
+          DO j = tfft%map_set_psi(1,iter), tfft%map_set_psi(2,iter)
+             aux( j, i ) = (0.d0, 0.d0)
+          ENDDO
+          DO j = tfft%map_set_psi(3,iter), tfft%map_set_psi(4,iter)
              aux( j, i ) = conjg( psi( indz_r( offset + j ), offset2 - 1 ) - (0.0d0,1.0d0) * psi( indz_r( offset + j ), offset2 ) )
           ENDDO
-          DO j = 1, tfft%map_set_psi(2,iter)-1
+          DO j = tfft%map_set_psi(5,iter), tfft%map_set_psi(6,iter)
              aux( j, i ) = psi( nzh_r( offset + j ), offset2 - 1 ) + (0.0d0,1.0d0) * psi( nzh_r( offset + j ), offset2 )
           ENDDO
 
-          DO j = tfft%map_set_psi(3,iter), tfft%map_set_psi(4,iter)
+          DO j = tfft%map_set_psi(7,iter), tfft%map_set_psi(8,iter)
              aux( j, i ) = (0.d0, 0.d0)
           ENDDO
 
-          DO j = tfft%map_set_psi(5,iter)+1, fpar%kr3s
+          DO j = tfft%map_set_psi(9,iter), tfft%map_set_psi(10,iter)
              aux( j, i ) = psi( nzh_r( offset + j ), offset2 - 1 ) + (0.0d0,1.0d0) * psi( nzh_r( offset + j ), offset2 )
           ENDDO
-          DO j = tfft%map_set_psi(6,iter)+1, fpar%kr3s
+          DO j = tfft%map_set_psi(11,iter), tfft%map_set_psi(12,iter)
              aux( j, i ) = conjg( psi( indz_r( offset + j ), offset2 - 1 ) - (0.0d0,1.0d0) * psi( indz_r( offset + j ), offset2 ) )
+          ENDDO
+          DO j = tfft%map_set_psi(13,iter), tfft%map_set_psi(14,iter)
+             aux( j, i ) = (0.d0, 0.d0)
           ENDDO
 
        ENDDO
@@ -1018,22 +1024,28 @@ CONTAINS
           offset3  = ( lter - 1 ) * fpar%kr3s
           offset4 = 2 * ( ( (l-1) / tfft%nsw(parai%me+1) ) + 1 )
 
-          DO j = 1, tfft%map_set_psi(1,lter)-1
+          DO j = tfft%map_set_psi(1,lter), tfft%map_set_psi(2,lter)
+             aux( j, i ) = (0.d0, 0.d0)
+          ENDDO
+          DO j = tfft%map_set_psi(3,lter), tfft%map_set_psi(4,lter)
              aux( j, l ) = conjg( psi( indz_r( offset3 + j ), offset4 - 1 ) - (0.0d0,1.0d0) * psi( indz_r( offset3 + j ), offset4 ) )
           ENDDO
-          DO j = 1, tfft%map_set_psi(2,lter)-1
+          DO j = tfft%map_set_psi(5,lter), tfft%map_set_psi(6,lter)
              aux( j, l ) = psi( nzh_r( offset3 + j ), offset4 - 1 ) + (0.0d0,1.0d0) * psi( nzh_r( offset3 + j ), offset4 )
           ENDDO
 
-          DO j = tfft%map_set_psi(3,lter), tfft%map_set_psi(4,lter)
+          DO j = tfft%map_set_psi(7,lter), tfft%map_set_psi(8,lter)
              aux( j, l ) = (0.d0, 0.d0)
           ENDDO
 
-          DO j = tfft%map_set_psi(5,lter)+1, fpar%kr3s
+          DO j = tfft%map_set_psi(9,lter), tfft%map_set_psi(10,lter)
              aux( j, l ) = psi( nzh_r( offset3 + j ), offset4 - 1 ) + (0.0d0,1.0d0) * psi( nzh_r( offset3 + j ), offset4 )
           ENDDO
-          DO j = tfft%map_set_psi(6,lter)+1, fpar%kr3s
+          DO j = tfft%map_set_psi(11,lter), tfft%map_set_psi(12,lter)
              aux( j, l ) = conjg( psi( indz_r( offset3 + j ), offset4 - 1 ) - (0.0d0,1.0d0) * psi( indz_r( offset3 + j ), offset4 ) )
+          ENDDO
+          DO j = tfft%map_set_psi(13,lter), tfft%map_set_psi(14,lter)
+             aux( j, i ) = (0.d0, 0.d0)
           ENDDO
 
        ENDDO
@@ -1043,22 +1055,28 @@ CONTAINS
           offset5  = ( fter - 1 ) * fpar%kr3s
           offset6 = 2 * ( ( (f-1) / tfft%nsw(parai%me+1) ) + 1 ) - 1
 
-          DO j = 1, tfft%map_set_psi(1,fter)-1
+          DO j = tfft%map_set_psi(1,fter), tfft%map_set_psi(2,fter)
+             aux( j, i ) = (0.d0, 0.d0)
+          ENDDO
+          DO j = tfft%map_set_psi(3,fter), tfft%map_set_psi(4,fter)
              aux( j, f ) = conjg( psi( indz_r( offset5 + j ), offset6 ) )
           ENDDO
-          DO j = 1, tfft%map_set_psi(2,fter)-1
+          DO j = tfft%map_set_psi(5,fter), tfft%map_set_psi(6,fter)
              aux( j, f ) = psi( nzh_r( offset5 + j ), offset6 )
           ENDDO
 
-          DO j = tfft%map_set_psi(3,fter), tfft%map_set_psi(4,fter)
+          DO j = tfft%map_set_psi(7,fter), tfft%map_set_psi(8,fter)
              aux( j, f ) = (0.d0, 0.d0)
           ENDDO
 
-          DO j = tfft%map_set_psi(5,fter)+1, fpar%kr3s
+          DO j = tfft%map_set_psi(9,fter), tfft%map_set_psi(10,fter)
              aux( j, f ) = psi( nzh_r( offset5 + j ), offset6 )
           ENDDO
-          DO j = tfft%map_set_psi(6,fter)+1, fpar%kr3s
+          DO j = tfft%map_set_psi(11,fter), tfft%map_set_psi(12,fter)
              aux( j, f ) = conjg( psi( indz_r( offset5 + j ), offset6 ) )
+          ENDDO
+          DO j = tfft%map_set_psi(13,fter), tfft%map_set_psi(14,fter)
+             aux( j, i ) = (0.d0, 0.d0)
           ENDDO
 
        ENDDO
@@ -1196,13 +1214,16 @@ CONTAINS
 
     DO i = tfft%thread_y_start( mythread+1, tfft%which ), tfft%thread_y_end( mythread+1, tfft%which )
        iter = mod( i-1, my_nr1s ) + 1
-       DO k = 1, tfft%zero_z2y_start( iter, tfft%which ) - 1
-          aux( k, i ) = comm_mem_recv( map_z2y( (i-1) * fpar%kr2s + k ) + offset )
-       END DO
-       DO k = tfft%zero_z2y_start( iter, tfft%which ), tfft%zero_z2y_end( iter, tfft%which )
+       DO k = tfft%map_z2y_bounds( iter, 1, tfft%which ), tfft%map_z2y_bounds( iter, 2, tfft%which ) - 1
           aux( k, i ) = (0.0_real_8,0.0_real_8)
        END DO
-       DO k = tfft%zero_z2y_end( iter, tfft%which ) + 1, fpar%kr2s
+       DO k = tfft%map_z2y_bounds( iter, 5, tfft%which ), tfft%map_z2y_bounds( iter, 6, tfft%which ) - 1
+          aux( k, i ) = comm_mem_recv( map_z2y( (i-1) * fpar%kr2s + k ) + offset )
+       END DO
+       DO k = tfft%map_z2y_bounds( iter, 3, tfft%which ), tfft%map_z2y_bounds( iter, 4, tfft%which ) - 1
+          aux( k, i ) = (0.0_real_8,0.0_real_8)
+       END DO
+       DO k = tfft%map_z2y_bounds( iter, 7, tfft%which ), tfft%map_z2y_bounds( iter, 8, tfft%which ) - 1
           aux( k, i ) = comm_mem_recv( map_z2y( (i-1) * fpar%kr2s + k ) + offset )
        END DO
     END DO

@@ -460,7 +460,7 @@ CONTAINS
     ALLOCATE(ihray(fpar%kr1s,fpar%kr2s),STAT=ierr)
     IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
          __LINE__,__FILE__)
-    ALLOCATE(mgpa(fpar%kr2s,fpar%kr3s),STAT=ierr)
+    ALLOCATE(mgpa(fpar%kr1s,fpar%kr2s),STAT=ierr)
     IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
          __LINE__,__FILE__)
     ALLOCATE(iatpe(ions1%nat),STAT=ierr)
@@ -552,7 +552,7 @@ CONTAINS
     ! DISTRIBUTE REAL SPACE XY-PLANES
     ! ==--------------------------------------------------------------==
 !CLR: Currently not used, maybe activated again at a later time
-!    CALL dist_entity2(spar%nr3s,parai%nproc,tfft%nr3_ranges)
+    CALL dist_entity2(spar%nr3s,parai%nproc,parap%nrxpl)
     CALL zeroing(parap%nrzpl)!,2*(maxcpu+1))
     IF (isos1%tclust.AND.isos3%ps_type.EQ.1) THEN
 !CLR: Whatever case this is: it will probably not work if triggered
@@ -623,22 +623,22 @@ CONTAINS
     ig=0
     ncpw%ngw=0
     ncpw%nhg=0
-    DO i=0,parm%nr3-1
-       jmin=-parm%nr1+1
-       jmax=parm%nr1-1
+    DO i=0,parm%nr1-1
+       jmin=-parm%nr2+1
+       jmax=parm%nr2-1
        IF (i.EQ.0) THEN
           jmin=0
        ENDIF
        DO j=jmin,jmax
-          kmin=-parm%nr2+1
-          kmax=parm%nr2-1
+          kmin=-parm%nr3+1
+          kmax=parm%nr3-1
           IF (i.EQ.0.AND.j.EQ.0) THEN
              kmin=0
           ENDIF
           DO k=kmin,kmax
              g2=0._real_8
              DO ir=1,3
-                t=REAL(i,kind=real_8)*gvec_com%b3(ir)+REAL(j,kind=real_8)*gvec_com%b1(ir)+REAL(k,kind=real_8)*gvec_com%b2(ir)
+                t=REAL(i,kind=real_8)*gvec_com%b1(ir)+REAL(j,kind=real_8)*gvec_com%b2(ir)+REAL(k,kind=real_8)*gvec_com%b3(ir)
                 g2=g2+t*t
              ENDDO
              IF (compare_lt(g2,gvec_com%gcut)) THEN
@@ -681,8 +681,8 @@ CONTAINS
     CALL zeroing(mgpa)!,kr2s*kr3s)
     parai%nhrays=0
     parai%ngrays=0
-    DO j1=1,fpar%kr1s
-       DO j2=1,fpar%kr2s
+    DO j1=1,fpar%kr2s
+       DO j2=1,fpar%kr1s
           IF (ihray(j2,j1).EQ.-(parai%mepos+1)) parai%nhrays=parai%nhrays+1
           IF (ixray(j2,j1).EQ.-(parai%mepos+1)) THEN
              parai%ngrays=parai%ngrays+1
@@ -691,8 +691,8 @@ CONTAINS
        ENDDO
     ENDDO
     img=parai%ngrays
-    DO j1=1,fpar%kr1s
-       DO j2=1,fpar%kr2s
+    DO j1=1,fpar%kr2s
+       DO j2=1,fpar%kr1s
           IF (ihray(j2,j1).EQ.-(parai%mepos+1).AND.mgpa(j2,j1).EQ.0) THEN
              img=img+1
              mgpa(j2,j1)=img
@@ -701,9 +701,9 @@ CONTAINS
     ENDDO
     ncpw%nhgl=spar%nhgls
     ncpw%ngwl=spar%ngwls
-    parm%nr1 =parap%nrxpl(parai%mepos,2)-parap%nrxpl(parai%mepos,1)+1
+    parm%nr1 =spar%nr1s
     parm%nr2 =spar%nr2s
-    parm%nr3 =spar%nr3s
+    parm%nr3 =parap%nrxpl(parai%mepos,2)-parap%nrxpl(parai%mepos,1)+1
     parap%sparm(1,parai%mepos)=ncpw%nhg
     parap%sparm(2,parai%mepos)=ncpw%nhgl
     CALL tihalt(procedureN//'_a',isub2)
@@ -867,8 +867,7 @@ CONTAINS
     ! LEADING DIMENSIONS OF REAL SPACE ARRAYS
     ! ==--------------------------------------------------------------==
     CALL leadim(parm%nr1,parm%nr2,parm%nr3,fpar%kr1,fpar%kr2,fpar%kr3)
-    fpar%kr1 = tfft%nr3p( parai%me+1 )
-    fpar%nnr1=fpar%kr1*fpar%kr2s*fpar%kr3s
+    fpar%nnr1=fpar%kr1s*fpar%kr2s*fpar%kr3s
     fpar%nng1=tfft%nsp( parai%me+1 ) * fpar%kr3s
     DEALLOCATE(thread_buff,STAT=ierr)
     IF(ierr/=0) CALL stopgm(procedureN,'deallocation problem', &
@@ -879,12 +878,12 @@ CONTAINS
        WRITE(6,*) ' USING NEW G-SPACE DISTRIBUTION: Z-PLANES ARE PARALLELIZED! '
        WRITE(6,*) ''
        WRITE(6,'(A,A)') '  NCPU     NGW',&
-            '     NHG  PLANES  GXRAYS  HXRAYS ORBITALS Z-PLANES'
+            '     NHG  (Z-)PLANES  GXRAYS  HXRAYS ORBITALS'
        DO i=0,parai%nproc-1
           iorb=parap%nst12(i,2)-parap%nst12(i,1)+1
           izpl=parap%nrzpl(i,2)-parap%nrzpl(i,1)+1
-          WRITE(6,'(I6,8I8)') i,parap%sparm(3,i),parap%sparm(1,i),parap%sparm(5,i),&
-               parap%sparm(9,i),parap%sparm(8,i),iorb,izpL,tfft%nr3p(i+1)
+          WRITE(6,'(I6,8I8)') i,parap%sparm(3,i),parap%sparm(1,i),parap%sparm(7,i),&
+               parap%sparm(9,i),parap%sparm(8,i),iorb,izpL
           ! IF(SPARM(3,I).LE.0) CALL stopgm(procedureN,
           ! *            'NGW .LE. 0')
        ENDDO
@@ -1097,15 +1096,15 @@ CONTAINS
     nh1=parm%nr1/2+1
     nh2=parm%nr2/2+1
     nh3=parm%nr3/2+1
-    DO i=0,parm%nr3-1
-       jmin=-parm%nr1+1
-       jmax=parm%nr1-1
+    DO i=0,parm%nr1-1
+       jmin=-parm%nr2+1
+       jmax=parm%nr2-1
        IF (i.EQ.0) THEN
           jmin=0
        ENDIF
        DO j=jmin,jmax
-          kmin=-parm%nr2+1
-          kmax=parm%nr2-1
+          kmin=-parm%nr3+1
+          kmax=parm%nr3-1
           IF (i.EQ.0.AND.j.EQ.0) THEN
              kmin=0
           ENDIF
@@ -1130,7 +1129,7 @@ CONTAINS
                    IF (ix2.GT.0) THEN
                       IF ((in1.NE.id1).OR.(in2.NE.id2)) THEN
                          IF (paral%io_parent) WRITE(6,*) ' INCONSISTENT MESH?'
-                         CALL stopgm('XFFT',' ',& 
+                         CALL stopgm('ZFFT',' ',& 
                               __LINE__,__FILE__)
                       ENDIF
                    ENDIF
@@ -1211,7 +1210,8 @@ CONTAINS
   ! ==================================================================
   SUBROUTINE czfft(iray,gvcut)
     ! ==--------------------------------------------------------------==
-    INTEGER                                  :: iray(fpar%kr2,*)
+!    INTEGER                                  :: iray(fpar%kr2,*)
+    INTEGER                                  :: iray(fpar%kr1,fpar%kr2)
     REAL(real_8)                             :: gvcut
 
     INTEGER                                  :: i, icpu1, icpu2, id1, id2, &
@@ -1225,22 +1225,22 @@ CONTAINS
     nh1=parm%nr1/2+1
     nh2=parm%nr2/2+1
     nh3=parm%nr3/2+1
-    DO i=0,parm%nr3-1
-       jmin=-parm%nr1+1
-       jmax=parm%nr1-1
+    DO i=0,parm%nr1-1
+       jmin=-parm%nr2+1
+       jmax=parm%nr2-1
        IF (i.EQ.0) THEN
           jmin=0
        ENDIF
        DO j=jmin,jmax
-          kmin=-parm%nr2+1
-          kmax=parm%nr2-1
+          kmin=-parm%nr3+1
+          kmax=parm%nr3-1
           IF (i.EQ.0.AND.j.EQ.0) THEN
              kmin=0
           ENDIF
           DO k=kmin,kmax
              g2=0._real_8
              DO ir=1,3
-                t=REAL(i,kind=real_8)*gvec_com%b3(ir)+REAL(j,kind=real_8)*gvec_com%b1(ir)+REAL(k,kind=real_8)*gvec_com%b2(ir)
+                t=REAL(i,kind=real_8)*gvec_com%b1(ir)+REAL(j,kind=real_8)*gvec_com%b2(ir)+REAL(k,kind=real_8)*gvec_com%b3(ir)
                 g2=g2+t*t
              ENDDO
              IF (compare_lt(g2,gvcut)) THEN

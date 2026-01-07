@@ -139,8 +139,7 @@ MODULE fft
      INTEGER, ALLOCATABLE :: map_y2z(:,:)
      INTEGER, ALLOCATABLE :: map_z2y_wave(:,:)
      INTEGER, ALLOCATABLE :: map_z2y_pot(:)
-     INTEGER, ALLOCATABLE :: zero_z2y_start(:,:)
-     INTEGER, ALLOCATABLE :: zero_z2y_end(:,:)
+     INTEGER, ALLOCATABLE :: map_z2y_bounds(:,:,:)
 
      INTEGER :: nr1w
      INTEGER :: nr1p

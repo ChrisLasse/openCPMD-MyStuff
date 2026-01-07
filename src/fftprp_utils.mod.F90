@@ -139,13 +139,13 @@ CONTAINS
 ! GATHER ARRAY FOR FFT ALONG X
 ! SPARSITY FOR FFT ALONG Y
 
-    ALLOCATE(mg(fpar%kr2s,fpar%kr3s),STAT=ierr)
+    ALLOCATE(mg(fpar%kr1s,fpar%kr2s),STAT=ierr)
     IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
          __LINE__,__FILE__)
-    ALLOCATE(mz((2*spar%nr3s)),STAT=ierr)
+    ALLOCATE(mz((2*spar%nr2s)),STAT=ierr)
     IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
          __LINE__,__FILE__)
-    ALLOCATE(my((2*spar%nr2s)),STAT=ierr)
+    ALLOCATE(my((2*spar%nr1s)),STAT=ierr)
     IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
          __LINE__,__FILE__)
     CALL zeroing(mg)!,kr2s*kr3s)
@@ -167,8 +167,8 @@ CONTAINS
     DO ig=1,ncpw%ngw
        ny2=inyh(dime(1),ig)
        ny3=inyh(dime(2),ig)
-       iny2=-ny2+2*nh2
-       iny3=-ny3+2*nh3
+       iny2=-ny2+2*nh1
+       iny3=-ny3+2*nh2
        mg(ny2,ny3)=mg(ny2,ny3)+1
        mg(iny2,iny3)=mg(iny2,iny3)+1
        my(ny2)=my(ny2)+1
@@ -176,20 +176,20 @@ CONTAINS
        mz(ny3)=mz(ny3)+1
        mz(iny3)=mz(iny3)+1
     ENDDO
-    CALL mp_sum(my,my(spar%nr2s+1:),spar%nr2s,parai%allgrp)
-    CALL icopy(spar%nr2s,my(spar%nr2s+1),1,my,1)
-    CALL mp_sum(mz,mz(spar%nr3s+1:),spar%nr3s,parai%allgrp)
-    CALL icopy(spar%nr3s,mz(spar%nr3s+1),1,mz,1)
+    CALL mp_sum(my,my(spar%nr1s+1:),spar%nr1s,parai%allgrp)
+    CALL icopy(spar%nr1s,my(spar%nr1s+1),1,my,1)
+    CALL mp_sum(mz,mz(spar%nr2s+1:),spar%nr2s,parai%allgrp)
+    CALL icopy(spar%nr2s,mz(spar%nr2s+1),1,mz,1)
     kr2min=1
-    DO i=1,fpar%kr2s
+    DO i=1,fpar%kr1s
        IF (my(i).NE.0) THEN
           kr2min=i
           GOTO 50
        ENDIF
     ENDDO
 50  CONTINUE
-    kr2max=fpar%kr2s
-    DO i=fpar%kr2s,1,-1
+    kr2max=fpar%kr1s
+    DO i=fpar%kr1s,1,-1
        IF (my(i).NE.0) THEN
           kr2max=i
           GOTO 51
@@ -197,15 +197,15 @@ CONTAINS
     ENDDO
 51  CONTINUE
     kr3min=1
-    DO i=1,fpar%kr3
+    DO i=1,fpar%kr2
        IF (mz(i).NE.0) THEN
           kr3min=i
           GOTO 52
        ENDIF
     ENDDO
 52  CONTINUE
-    kr3max=fpar%kr3s
-    DO i=fpar%kr3,1,-1
+    kr3max=fpar%kr2s
+    DO i=fpar%kr2,1,-1
        IF (mz(i).NE.0) THEN
           kr3max=i
           GOTO 53
@@ -223,19 +223,19 @@ CONTAINS
     nhrm = 0
     ngrm = 0
     DO i=0,parai%nproc-1
-       nr1m = MAX(nr1m,parap%sparm(5,i))
+       nr1m = MAX(nr1m,parap%sparm(7,i))
        nhrm = MAX(nhrm,parap%sparm(8,i))
        ngrm = MAX(ngrm,parap%sparm(9,i))
     ENDDO
-    kr1m=MAX(nr1m+MOD(nr1m+1,2),fpar%kr1)
+    kr1m=MAX(nr1m+MOD(nr1m+1,2),fpar%kr3)
     img=0
 
     !CLR new_gdist uses a centered plane-grid
     IF ( cntl%new_gdist ) THEN
-       DO jfa=1,fpar%kr3s
-          j = MOD( ( fpar%kr3s / 2 ) + 1 + jfa - 1 - 1, fpar%kr3s ) + 1
-          DO ifa=1,fpar%kr2s
-             i = MOD( ( fpar%kr2s / 2 ) + 1 + ifa - 1 - 1, fpar%kr2s ) + 1
+       DO jfa=1,fpar%kr2s
+          j = MOD( ( fpar%kr2s / 2 ) + 1 + jfa - 1 - 1, fpar%kr2s ) + 1
+          DO ifa=1,fpar%kr1s
+             i = MOD( ( fpar%kr1s / 2 ) + 1 + ifa - 1 - 1, fpar%kr1s ) + 1
              IF (mg(i,j).NE.0) THEN
                 img=img+1
                 mg(i,j)=img
@@ -257,18 +257,24 @@ CONTAINS
     DO ig=ncpw%ngw+1,ncpw%nhg
        ny2=inyh(dime(1),ig)
        ny3=inyh(dime(2),ig)
-       iny2=-ny2+2*nh2
-       iny3=-ny3+2*nh3
+       iny2=-ny2+2*nh1
+       iny3=-ny3+2*nh2
        jmg=mg(ny2,ny3)
+!       IF (ny2 .lt. 1 .or. ny3 .lt. 1) THEN
+!          write(6,*) ny2, ny3, ig
+!       ENDIF
+!       IF (iny2 .lt. 1 .or. iny3 .lt. 1) THEN
+!          write(6,*) iny2, iny3, ig
+!       ENDIF
        IF (jmg.EQ.0) mg(ny2,ny3)=-1
        jmg=mg(iny2,iny3)
        IF (jmg.EQ.0) mg(iny2,iny3)=-1
     ENDDO
     IF ( cntl%new_gdist ) THEN
-       DO jfa=1,fpar%kr3s
-          j = MOD( ( fpar%kr3s / 2 ) + 1 + jfa - 1 - 1, fpar%kr3s ) + 1
-          DO ifa=1,fpar%kr2s
-             i = MOD( ( fpar%kr2s / 2 ) + 1 + ifa - 1 - 1, fpar%kr2s ) + 1
+       DO jfa=1,fpar%kr2s
+          j = MOD( ( fpar%kr2s / 2 ) + 1 + jfa - 1 - 1, fpar%kr2s ) + 1
+          DO ifa=1,fpar%kr1s
+             i = MOD( ( fpar%kr1s / 2 ) + 1 + ifa - 1 - 1, fpar%kr1s ) + 1
              IF (mg(i,j).LT.0) THEN
                 img=img+1
                 mg(i,j)=img
@@ -292,8 +298,8 @@ CONTAINS
     IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
          __LINE__,__FILE__)
     CALL zeroing(ms)!,2*nhrm)
-    DO i=1,fpar%kr2s
-       DO j=1,fpar%kr3s
+    DO i=1,fpar%kr1s
+       DO j=1,fpar%kr2s
           ij=mg(i,j)
           IF (ij.GT.0) THEN
              ms(ij,1)=i
@@ -314,8 +320,8 @@ CONTAINS
           jj=ixf+ip*2*nhrm
           i=msp(ixf,1,ip+1)
           j=msp(ixf,2,ip+1)
-          msp(ixf,1,ip+1)=i+(j-1)*fpar%kr2s
-          IF (ixf.LE.parap%sparm(9,ip)) msp(ixf,2,ip+1)=i+(j-kr3min)*fpar%kr2s
+          msp(ixf,1,ip+1)=i+(j-1)*fpar%kr1s
+          IF (ixf.LE.parap%sparm(9,ip)) msp(ixf,2,ip+1)=i+(j-kr3min)*fpar%kr1s
        ENDDO
     ENDDO
     ! REDEFINE NZH AND INDZ FOR COMPRESSED STORAGE
@@ -335,12 +341,13 @@ CONTAINS
           ny2=inyh(2,ig)
           ny3=inyh(3,ig)
           IF( ny3 .lt. ( fpar%kr3s / 2 ) + 1 ) ny3 = ny3 + fpar%kr3s
+          nzh(ig)= ny3 - ( fpar%kr3s / 2 ) + (mg(ny1,ny2)-1)*fpar%kr3s
+          nzh_r( nzh(ig) ) = ig
+
           iny1=-ny1+2*nh1
           iny2=-ny2+2*nh2
           iny3=-ny3+2*nh3
           IF( iny3 .lt. ( fpar%kr3s / 2 ) + 1 ) iny3 = iny3 + fpar%kr3s
-          nzh(ig)=ny3 - ( fpar%kr3s / 2 ) + (mg(ny1,ny2)-1)*fpar%kr3s
-          nzh_r( nzh(ig) ) = ig
           indz(ig)=iny3 - ( fpar%kr3s / 2 ) + (mg(iny1,iny2)-1)*fpar%kr3s
           indz_r( indz(ig) ) = ig
        ENDDO
@@ -386,15 +393,15 @@ CONTAINS
             __LINE__,__FILE__)
     ENDIF
     ! ARRAY SIZE TO DO A 3D-FFT
-    maxfft = MAX(kr1m*fpar%kr2s*fpar%kr3s,parai%nproc*nr1m*nhrm)
-    IF (group%nogrp.GT.1) maxfft = MAX(fpar%krx*fpar%kr2s*fpar%kr3s,maxfft)
+    maxfft = MAX(kr1m*fpar%kr1s*fpar%kr2s,parai%nproc*nr1m*nhrm)
+    IF (group%nogrp.GT.1) maxfft = MAX(fpar%krx*fpar%kr1s*fpar%kr2s,maxfft)
     IF (isos1%tclust) THEN
        nr3m = 0
        DO i=0,parai%nproc-1
           nr3i = parap%nrzpl(i,2)-parap%nrzpl(i,1)+1
           nr3m = MAX(nr3m,nr3i)
        ENDDO
-       nclu = parai%nproc * nr1m*fpar%kr2s*nr3m
+       nclu = parai%nproc * nr1m*fpar%kr1s*nr3m
        maxfft = MAX(nclu,maxfft)
     ENDIF
     IF( cntl%new_gdist ) maxfft = MAX(maxfft,fpar%nng1)
@@ -825,7 +832,7 @@ CONTAINS
     INTEGER :: ierr
 
     !set_psi_new_gdist
-    ALLOCATE( tfft%map_set_psi( 6, tfft%nsw( parai%me+1 ) ), STAT=ierr )
+    ALLOCATE( tfft%map_set_psi( 14, tfft%nsw( parai%me+1 ) ), STAT=ierr )
     IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
        __LINE__,__FILE__)
     CALL Make_SetPsi_Maps( tfft%map_set_psi, fpar%kr3s, tfft%nsw(parai%me+1), tfft%ngw )
@@ -841,16 +848,13 @@ CONTAINS
     CALL Make_packing_Maps( tfft%map_transpose_y2x(:,2), tfft%map_transpose_x2y(:,2), tfft%zero_transpose_y2x_start(2), tfft%zero_transpose_y2x_end(2), tfft%nr1p, tfft%indp )
 
     !Packing z2y
-    ALLOCATE( tfft%zero_z2y_start( tfft%nr1p, 2 ), STAT=ierr )
-    IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
-       __LINE__,__FILE__)
-    ALLOCATE( tfft%zero_z2y_end( tfft%nr1p, 2 ), STAT=ierr )
+    ALLOCATE( tfft%map_z2y_bounds( tfft%nr1p, 8, 2 ), STAT=ierr )
     IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
        __LINE__,__FILE__)
     ALLOCATE( tfft%map_z2y_pot( tfft%my_nr3p * tfft%nr1p * fpar%kr2s ), STAT=ierr )
     IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
        __LINE__,__FILE__)
-    CALL Make_z2y_Maps( tfft, tfft%map_z2y_pot, 1, tfft%ir1p, tfft%nsp, tfft%nr1p, tfft%small_chunks(2), tfft%big_chunks(2), tfft%zero_z2y_start(:,2), tfft%zero_z2y_end(:,2) )
+    CALL Make_z2y_Maps( tfft, tfft%map_z2y_pot, 1, tfft%ir1p, tfft%nsp, tfft%nr1p, tfft%small_chunks(2), tfft%big_chunks(2), tfft%map_z2y_bounds(:,:,2) )
 
     !Packing y2z
     ALLOCATE( tfft%map_y2z( tfft%nr3px * parai%nproc * MAXVAL( tfft%nsp ), 2 ), STAT=ierr )
@@ -867,13 +871,14 @@ CONTAINS
         INTEGER, INTENT(IN)  :: nr3, my_nsw, ngms
         INTEGER, INTENT(OUT) :: set_psi_map( :, : )
 
-        INTEGER :: zero_start( my_nsw, 4 )
-        INTEGER :: zero_end( my_nsw, 4 )
+        INTEGER :: nzh_start( my_nsw, 2 ), nzh_end( my_nsw, 2 )
+        INTEGER :: indz_start( my_nsw, 2 ), indz_end( my_nsw, 2 )
+        INTEGER :: zero_start( my_nsw, 3 ), zero_end( my_nsw, 3 )
         LOGICAL :: l_map( nr3 * my_nsw )
         LOGICAL :: l_map_m( nr3 * my_nsw )
         LOGICAL :: l_map_z( nr3 * my_nsw )
-        INTEGER :: i, j
-        LOGICAL :: first
+        INTEGER :: i, j, k
+        LOGICAL :: start
 
         !$omp parallel private( i )
         !$omp do
@@ -893,24 +898,29 @@ CONTAINS
         !$omp end do nowait
         !$omp end parallel
 
-        zero_start = 1
-        zero_end   = nr3
-        first = .true.
-
-        !$omp parallel do private( i, first, j )
+        nzh_start = 0
+        nzh_end = 0
+        !$omp parallel do private( i, start, j, k )
         DO i = 1, my_nsw
-           first = .true.
+           start = .true.
+           k = 1
            DO j = 1, nr3
 
               IF( l_map( (i-1)*nr3 + j ) .eqv. .true. ) THEN
-                 IF( first .eqv. .false. ) THEN
-                    zero_end(i,1) = j-1
-                    first = .true.
+                 IF( start .eqv. .true. ) THEN
+                    nzh_start(i,k) = j
+                    start = .false.
                  END IF
               ELSE
-                 IF( first .eqv. .true. ) THEN
-                    zero_start(i,1) = j
-                    first = .false.
+                 IF( start .eqv. .false. ) THEN
+                    nzh_end(i,k) = j
+                    k = k + 1
+                    start = .true.
+                 END IF
+              END IF
+              IF( j .eq. nr3 ) THEN
+                 IF( start .eqv. .false. ) THEN
+                    nzh_end(i,k) = j + 1
                  END IF
               END IF
 
@@ -918,41 +928,64 @@ CONTAINS
         ENDDO
         !$omp end parallel do
 
-        !$omp parallel do private( i, first, j )
+        indz_start = 0
+        indz_end = 0
+        !$omp parallel do private( i, start, j, k )
         DO i = 1, my_nsw
-           first = .true.
-           DO j = 1, nr3
-
-              IF( l_map_z( (i-1)*nr3 + j ) .eqv. .true. ) THEN
-                 IF( first .eqv. .false. ) THEN
-                    zero_end(i,2) = j-1
-                    first = .true.
-                 END IF
-              ELSE
-                 IF( first .eqv. .true. ) THEN
-                    zero_start(i,2) = j
-                    first = .false.
-                 END IF
-              END IF
-
-           ENDDO
-        ENDDO
-        !$omp end parallel do
-
-        !$omp parallel do private( i, first, j )
-        DO i = 1, my_nsw
-           first = .true.
+           start = .true.
+           k = 1
            DO j = 1, nr3
 
               IF( l_map_m( (i-1)*nr3 + j ) .eqv. .true. ) THEN
-                 IF( first .eqv. .false. ) THEN
-                    zero_end(i,3) = j-1
-                    first = .true.
+                 IF( start .eqv. .true. ) THEN
+                    indz_start(i,k) = j
+                    start = .false.
                  END IF
               ELSE
-                 IF( first .eqv. .true. ) THEN
-                    zero_start(i,3) = j
-                    first = .false.
+                 IF( start .eqv. .false. ) THEN
+                    indz_end(i,k) = j
+                    k = k + 1
+                    start = .true.
+                 END IF
+              END IF
+              IF( j .eq. nr3 ) THEN
+                 IF( start .eqv. .false. ) THEN
+                    indz_end(i,k) = j + 1
+                 END IF
+              END IF
+
+           ENDDO
+        ENDDO
+        !$omp end parallel do
+
+        zero_start = 0
+        zero_end = 0
+        !$omp parallel do private( i, start, j, k )
+        DO i = 1, my_nsw
+           start = .true.
+           k = 1
+           DO j = 1, nr3
+
+              IF( j .eq. 1 ) THEN
+                 IF( l_map_z( (i-1)*nr3 + j ) .eqv. .true. ) THEN
+                    k = k + 1
+                 END IF
+              END IF
+              IF( l_map_z( (i-1)*nr3 + j ) .eqv. .false. ) THEN
+                 IF( start .eqv. .true. ) THEN
+                    zero_start(i,k) = j
+                    start = .false.
+                 END IF
+              ELSE
+                 IF( start .eqv. .false. ) THEN
+                    zero_end(i,k) = j
+                    k = k + 1
+                    start = .true.
+                 END IF
+              END IF
+              IF( j .eq. nr3 ) THEN
+                 IF( start .eqv. .false. ) THEN
+                    zero_end(i,k) = j + 1
                  END IF
               END IF
 
@@ -961,18 +994,21 @@ CONTAINS
         !$omp end parallel do
 
         DO i = 1, my_nsw
-           zero_start( i, 4 ) = MAXVAL( zero_start( i, 1:3 ), 1 )
-           zero_end  ( i, 4 ) = MINVAL( zero_end  ( i, 1:3 ), 1 )
-        ENDDO
 
-        DO i = 1, my_nsw
-
-           set_psi_map( 1 , i ) = zero_start( i , 3 )
-           set_psi_map( 2 , i ) = zero_start( i , 1 )
-           set_psi_map( 3 , i ) = zero_start( i , 2 )
-           set_psi_map( 4 , i ) = zero_end  ( i , 2 )
-           set_psi_map( 5 , i ) = zero_end  ( i , 1 )
-           set_psi_map( 6 , i ) = zero_end  ( i , 3 )
+           set_psi_map( 1, i ) = zero_start( i , 1 )
+           set_psi_map( 2, i ) = zero_end( i , 1 ) -1
+           set_psi_map( 3, i ) = indz_start( i , 1 )
+           set_psi_map( 4, i ) = indz_end( i , 1 ) -1
+           set_psi_map( 5, i ) = nzh_start( i , 1 )
+           set_psi_map( 6, i ) = nzh_end( i , 1 ) -1
+           set_psi_map( 7, i ) = zero_start( i , 2 )
+           set_psi_map( 8, i ) = zero_end( i , 2 ) -1
+           set_psi_map( 9, i ) = nzh_start( i , 2 )
+           set_psi_map( 10, i ) = nzh_end( i , 2 ) -1
+           set_psi_map( 11, i ) = indz_start( i , 2 )
+           set_psi_map( 12, i ) = indz_end( i , 2 ) -1
+           set_psi_map( 13, i ) = zero_start( i , 3 )
+           set_psi_map( 14, i ) = zero_end( i , 3 ) -1
 
         ENDDO
 
