@@ -35,8 +35,7 @@ MODULE fftmain_utils
                                              fftcu_inv_full_2,&
                                              fftcu_inv_sprs_1,&
                                              fftcu_inv_sprs_2
-  USE fftnew_utils,                    ONLY: Prep_fft_comm_preinitialized,&
-                                             fft_new_gdist_setup,&
+  USE fftnew_utils,                    ONLY: fft_new_gdist_setup,&
                                              comm_send,&
                                              comm_recv,&
                                              locks_calc_inv,&
