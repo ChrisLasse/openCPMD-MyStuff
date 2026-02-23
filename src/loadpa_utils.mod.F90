@@ -1477,15 +1477,9 @@ CONTAINS
     tfft%small_chunks(1) = tfft%nr3px * MAXVAL( tfft%nsw )
     tfft%small_chunks(2) = tfft%nr3px * MAXVAL( tfft%nsp )
     tfft%no_comm = .FALSE.
-    IF( cntl%fft_distmem ) THEN
-       tfft%big_chunks(1)   = tfft%small_chunks(1)
-       tfft%big_chunks(2)   = tfft%small_chunks(2)
-       IF( parai%cp_nproc .eq. 1 ) tfft%no_comm = .TRUE.
-    ELSE
-       tfft%big_chunks(1)   = tfft%small_chunks(1) * parai%max_node_nproc * parai%max_node_nproc
-       tfft%big_chunks(2)   = tfft%small_chunks(2) * parai%max_node_nproc * parai%max_node_nproc
-       IF( parai%nnode .eq. 1 ) tfft%no_comm = .TRUE.
-    END IF
+    tfft%big_chunks(1)   = tfft%small_chunks(1)
+    tfft%big_chunks(2)   = tfft%small_chunks(2)
+    IF( parai%cp_nproc .eq. 1 ) tfft%no_comm = .TRUE.
     tfft%tscale = 1.0d0 / dble( fpar%kr1s * fpar%kr2s * fpar%kr3s )
 
   END SUBROUTINE SetupArrays

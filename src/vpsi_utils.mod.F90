@@ -2404,11 +2404,7 @@ CONTAINS
                        !$  locks_omp( mythread+1, counter(4), 1 ) = .false.
                        !$omp flush( locks_omp )
                        !$  IF( parai%ncpus_FFT .eq. 1 .or. .not. ANY( locks_omp( :, counter(4), 1 ) ) ) THEN
-                       !$     IF( cntl%fft_distmem ) THEN
-                       !$        locks_cc_invfw( 1, counter(4), 3 ) = .false.
-                       !$     ELSE
-                       !$        locks_cc_invfw( parai%node_me+1, counter(4), 3 ) = .false.
-                       !$     END IF
+                       !$     locks_cc_invfw( 1, counter(4), 3 ) = .false.
                        !$omp  flush( locks_cc_invfw )
                        !$  END IF
                     END IF
@@ -2437,17 +2433,7 @@ CONTAINS
        END IF
 
        IF( tfft%no_comm .eq. 1 ) THEN
-          IF( cntl%fft_distmem ) THEN
-             !$OMP Barrier
-          ELSE
-             counter(5) = counter(5) + 1
-             !$OMP Barrier
-             IF( mythread .eq. 0 ) locks_sing_2( parai%node_me+1, counter(5) ) = .false.
-             !$omp flush( locks_sing_2 )
-             !$  DO WHILE( ANY(locks_sing_2( :, counter(5) ) ) )
-             !$omp flush( locks_sing_2 )
-             !$  END DO
-          END IF
+          !$OMP Barrier
        END IF
 
        IF ( mythread .ge. 1 .or. .not. cntl%overlapp_comm_comp .or. parai%ncpus_FFT .eq. 1 .or. .not. tfft%do_comm(1) ) THEN

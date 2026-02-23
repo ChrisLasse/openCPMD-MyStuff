@@ -1178,16 +1178,6 @@ CONTAINS
 
     CALL z2y_fillsend( tfft, aux, comm_mem_send, batch_size, remswitch, mythread, nss )
 
-    IF( tfft%which .eq. 1 .and. .not. cntl%fft_distmem ) THEN
-
-       !In theory, locks could be made faster by checking each iset individually for non-remainder cases
-       !$omp flush( locks_calc_1 )
-       !$  DO WHILE( ANY(locks_calc_1( :, 1+current:fft_batchsize+current ) ) )
-       !$omp flush( locks_calc_1 )
-       !$  END DO
-
-    END IF
-
     CALL z2y_fillrecv( tfft, aux, comm_mem_recv, batch_size, remswitch, mythread, nss )
 
   !------------pack_z2y End------------------------------
@@ -1412,16 +1402,6 @@ CONTAINS
 
           CALL y2z_fillsend( tfft, aux2, comm_mem_send, batch_size, mythread, ispec, map_y2z )
 
-          IF( tfft%which .eq. 1 .and. .not. cntl%fft_distmem ) THEN
-
-             !In theory, locks could be made faster by checking each iset individually for non-remainder cases
-             !$omp flush( locks_calc_2 )
-             !$  DO WHILE( ANY(locks_calc_2(:,1+(counter-1)*fft_batchsize:ispec+(counter-1)*fft_batchsize ) ) )
-             !$omp flush( locks_calc_2 )
-             !$  END DO
-
-          END IF
-
           CALL y2z_fillrecv( tfft, aux2, comm_mem_recv, batch_size, mythread, ispec, map_y2z )
 
         !------------pack_y2z End------------------------------
@@ -1459,20 +1439,6 @@ CONTAINS
 
   !-----------unpack_y2z End-----------------------------
   !------------------------------------------------------
-
-    IF( tfft%which .eq. 1 .and. .not. cntl%fft_distmem ) THEN
-       !$  locks_omp( mythread+1, counter, 5 ) = .false.
-       !$omp flush( locks_omp )
-       IF( parai%ncpus_FFT .eq. 1 .or. .not. ANY( locks_omp( :, counter, 5 ) ) ) THEN
-          IF( cntl%krwfn ) THEN
-          !$   locks_calc_2( parai%node_me+1, 1+(counter+fft_numbuff-1)*fft_batchsize:batch_size+(counter+fft_numbuff-1)*fft_batchsize ) = .false.
-          !$omp flush( locks_calc_2 )
-          ELSE
-          !$   locks_calc_1( parai%node_me+1, 1+(counter+fft_numbuff-1)*fft_batchsize:fft_batchsize+(counter+fft_numbuff-1)*fft_batchsize ) = .false.
-          !$omp flush( locks_calc_1 )
-          END IF
-       END IF
-    END IF
 
   !------------------------------------------------------
   !------------z-FFT Start-------------------------------

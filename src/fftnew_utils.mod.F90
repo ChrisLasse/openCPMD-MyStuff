@@ -760,16 +760,9 @@ CONTAINS
 
        arrayshape(2) = 1
        arrayshape(3) = 2
-       IF( cntl%fft_distmem ) THEN
-          sendsize = MAXVAL ( tfft%nr3p ) * MAXVAL( nss )
-          arrayshape(1) = sendsize*parai%cp_nproc
-          ALLOCATE( Big_Pointer( arrayshape(1), arrayshape(2), arrayshape(3) ) )
-       ELSE   
-          sendsize = MAXVAL ( tfft%nr3p ) * MAXVAL( nss ) * parai%max_node_nproc * parai%max_node_nproc
-          arrayshape(1) = sendsize*parai%nnode
-          CALL mp_win_alloc_shared_mem( 'c', sendsize*parai%nnode*2, 1, baseptr, parai%node_nproc, parai%node_me, parai%node_grp )
-          CALL C_F_POINTER( baseptr(0), Big_Pointer, arrayshape )
-       END IF
+       sendsize = MAXVAL ( tfft%nr3p ) * MAXVAL( nss )
+       arrayshape(1) = sendsize*parai%cp_nproc
+       ALLOCATE( Big_Pointer( arrayshape(1), arrayshape(2), arrayshape(3) ) )
        comm_send => Big_Pointer(:,:,1)
        comm_recv => Big_Pointer(:,:,2)
 
@@ -1037,11 +1030,7 @@ CONTAINS
     DO j = 1, parai%nnode
        DO l = 1, parai%node_nproc_overview( j )
           ip = ip + 1
-          IF( cntl%fft_distmem ) THEN
-             offset = (ip-1) * batch_size * small_chunks
-          ELSE
-             offset = ( parai%node_me*parai%max_node_nproc + (l-1) ) * small_chunks + (j-1) * batch_size * big_chunks
-          END IF
+          offset = (ip-1) * batch_size * small_chunks
           !$omp do
           DO i = 1, nss( ip )
              m = tfft%ismap( i + tfft%iss(ip) ) !number of current pencil

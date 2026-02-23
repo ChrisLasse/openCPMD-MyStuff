@@ -1573,17 +1573,7 @@ CONTAINS
        END IF
 
        IF( tfft%no_comm ) THEN
-          IF( cntl%fft_distmem ) THEN
-             !$OMP Barrier
-          ELSE
-             counter(2) = counter(2) + 1
-             !$OMP Barrier
-             IF( mythread .eq. 0 ) locks_sing_1( parai%node_me+1, counter(2) ) = .false.
-             !$omp flush( locks_sing_1 )
-             !$  DO WHILE( ANY(locks_sing_1( :, counter(2) ) ) )
-             !$omp flush( locks_sing_1 )
-             !$  END DO
-          END IF
+          !$OMP Barrier
        END IF
 
        DO ispec = 1, fft_batchsize
