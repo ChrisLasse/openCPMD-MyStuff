@@ -431,7 +431,7 @@ CONTAINS
 
     INTEGER :: i, i0, ia, iat, icpu, ierr, ig, ihrays, ii, img, in1, in2, &
       in3, iorb, ip, ipp, ir, is, isub, isub2, isub3, isub4, izrays, izpl, j, &
-      j1, j2, jmax, jmin, k, kmax, kmin, mspace, nh1, nh2, nh3, nthreads,&
+      j1, j2, jmax, jmin, k, kmax, kmin, mspace, nh1, nh2, nh3, nthreads, &
       first, last, offset
     INTEGER, ALLOCATABLE                     :: ihray(:,:), ixray(:,:), &
                                                 mgpa(:,:), ind(:), pre_inyh(:,:), &
@@ -453,7 +453,6 @@ CONTAINS
     IF(ierr/=0) CALL stopgm(procedureN,'allocation problem', &
          __LINE__,__FILE__)
     IF (paral%io_parent)WRITE(6,'(/," ",16("PARA"))')
-    mspace = (fpar%kr2s*fpar%kr3s)/2 + 1
     ALLOCATE(ixray(fpar%kr1s,fpar%kr2s),STAT=ierr)
     IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
          __LINE__,__FILE__)
@@ -527,9 +526,6 @@ CONTAINS
     CALL dist_entity2(crge%n,parai%nproc,parap%nst12,nblocal=norbpe,iloc=parai%me)
     ! ==--------------------------------------------------------------==
 
-!    ALLOCATE(tfft%nr3_ranges(0:parai%nproc-1,2),STAT=ierr)
-!    IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
-!         __LINE__,__FILE__)
     ALLOCATE(tfft%indx_map(fpar%kr1s,fpar%kr2s),STAT=ierr)
     IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
          __LINE__,__FILE__)
@@ -552,7 +548,7 @@ CONTAINS
     ! DISTRIBUTE REAL SPACE XY-PLANES
     ! ==--------------------------------------------------------------==
 !CLR: Currently not used, maybe activated again at a later time
-    CALL dist_entity2(spar%nr3s,parai%nproc,parap%nrxpl)
+!    CALL dist_entity2(spar%nr3s,parai%nproc,parap%nrxpl)
     CALL zeroing(parap%nrzpl)!,2*(maxcpu+1))
     IF (isos1%tclust.AND.isos3%ps_type.EQ.1) THEN
 !CLR: Whatever case this is: it will probably not work if triggered
@@ -703,28 +699,9 @@ CONTAINS
     ncpw%ngwl=spar%ngwls
     parm%nr1 =spar%nr1s
     parm%nr2 =spar%nr2s
-    parm%nr3 =parap%nrxpl(parai%mepos,2)-parap%nrxpl(parai%mepos,1)+1
     parap%sparm(1,parai%mepos)=ncpw%nhg
     parap%sparm(2,parai%mepos)=ncpw%nhgl
     CALL tihalt(procedureN//'_a',isub2)
-    ! ==--------------------------------------------------------------==
-    ! IF K POINTS, WE NEED TO DOUBLE DIMENSIONS.
-    ! ==--------------------------------------------------------------==
-    IF (tkpts%tkpnt) THEN
-       nkpt%ngwk=ncpw%ngw*2
-       nkpt%nhgk=ncpw%nhg*2
-    ELSE
-       nkpt%ngwk=ncpw%ngw
-       nkpt%nhgk=ncpw%nhg
-    ENDIF
-    parap%sparm(3,parai%mepos)=ncpw%ngw
-    parap%sparm(4,parai%mepos)=ncpw%ngwl
-    parap%sparm(5,parai%mepos)=parm%nr1
-    parap%sparm(6,parai%mepos)=parm%nr2
-    parap%sparm(7,parai%mepos)=parm%nr3
-    parap%sparm(8,parai%mepos)=parai%nhrays
-    parap%sparm(9,parai%mepos)=parai%ngrays
-    CALL my_allgather_i(parap%sparm,SIZE(parap%sparm,1),parai%allgrp)
 
     ! ==--------------------------------------------------------------==
     ! SORTING OF G-VECTORS
@@ -740,7 +717,6 @@ CONTAINS
        inyh(:,i) = pre_inyh(:,ind(i))
     ENDDO
 
-
     CALL hpsort_eps( SUM(parap%sparm(1,0:parai%nproc-1)), chg, cind, eps8 )
 
     ip=0
@@ -751,21 +727,6 @@ CONTAINS
        END IF
     ENDDO
 
-    ! ==--------------------------------------------------------------==
-    geq0=.FALSE.
-    i0=0
-    DO ig=1,ncpw%ngw
-       IF (hg(ig).LT.1.e-5_real_8) THEN
-          geq0=.TRUE.
-          i0=parai%mepos
-       ENDIF
-    ENDDO
-    CALL mp_sum(i0,parai%igeq0,parai%allgrp)
-    IF (paral%io_parent) THEN
-       WRITE(6,'(13X,A,I5)') '   G=0 COMPONENT ON PROCESSOR : ',parai%igeq0
-       WRITE(6,'(" ",16("PARA"),/)')
-       CALL prmem(procedureN)
-    ENDIF
     ! ==--------------------------------------------------------------==
     ! SETUP ARRAYS NEEDED FOR NEW GDISTRIBUTION FFT
     ! ==--------------------------------------------------------------==
@@ -863,11 +824,47 @@ CONTAINS
 
     CALL select_kernals()
 
+    parm%nr3 = tfft%nr3p( parai%me+1 )
+    ! ==--------------------------------------------------------------==
+    ! IF K POINTS, WE NEED TO DOUBLE DIMENSIONS.
+    ! ==--------------------------------------------------------------==
+    IF (tkpts%tkpnt) THEN
+       nkpt%ngwk=ncpw%ngw*2
+       nkpt%nhgk=ncpw%nhg*2
+    ELSE
+       nkpt%ngwk=ncpw%ngw
+       nkpt%nhgk=ncpw%nhg
+    ENDIF
+    parap%sparm(3,parai%mepos)=ncpw%ngw
+    parap%sparm(4,parai%mepos)=ncpw%ngwl
+    parap%sparm(5,parai%mepos)=parm%nr1
+    parap%sparm(6,parai%mepos)=parm%nr2
+    parap%sparm(7,parai%mepos)=parm%nr3
+    parap%sparm(8,parai%mepos)=parai%nhrays
+    parap%sparm(9,parai%mepos)=parai%ngrays
+    CALL my_allgather_i(parap%sparm,SIZE(parap%sparm,1),parai%allgrp)
+
+    ! ==--------------------------------------------------------------==
+    geq0=.FALSE.
+    i0=0
+    DO ig=1,ncpw%ngw
+       IF (hg(ig).LT.1.e-5_real_8) THEN
+          geq0=.TRUE.
+          i0=parai%mepos
+       ENDIF
+    ENDDO
+    CALL mp_sum(i0,parai%igeq0,parai%allgrp)
+    IF (paral%io_parent) THEN
+       WRITE(6,'(13X,A,I5)') '   G=0 COMPONENT ON PROCESSOR : ',parai%igeq0
+       WRITE(6,'(" ",16("PARA"),/)')
+       CALL prmem(procedureN)
+    ENDIF
+
     ! ==--------------------------------------------------------------==
     ! LEADING DIMENSIONS OF REAL SPACE ARRAYS
     ! ==--------------------------------------------------------------==
     CALL leadim(parm%nr1,parm%nr2,parm%nr3,fpar%kr1,fpar%kr2,fpar%kr3)
-    fpar%nnr1=fpar%kr1s*fpar%kr2s*fpar%kr3s
+    fpar%nnr1=fpar%kr1s*fpar%kr2s*fpar%kr3
     fpar%nng1=tfft%nsp( parai%me+1 ) * fpar%kr3s
     DEALLOCATE(thread_buff,STAT=ierr)
     IF(ierr/=0) CALL stopgm(procedureN,'deallocation problem', &
