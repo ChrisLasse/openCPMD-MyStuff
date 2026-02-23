@@ -9,7 +9,6 @@ MODULE loadpa_utils
   USE error_handling,                  ONLY: stopgm
   USE fft,                             ONLY: tfft,&
                                              FFT_TYPE_DESCRIPTOR
-  USE fftkernal_utils,                 ONLY: select_kernals
   USE geq0mod,                         ONLY: geq0
   USE gvec,                            ONLY: epsg,&
                                              epsgx,&
@@ -447,8 +446,6 @@ CONTAINS
          __LINE__,__FILE__)
 
     CALL SetupArrays( ihray, ixray )
-
-    CALL select_kernals()
 
     parm%nr3 = tfft%nr3p( parai%me+1 )
     ! ==--------------------------------------------------------------==

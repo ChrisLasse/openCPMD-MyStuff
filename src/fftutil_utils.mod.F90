@@ -32,11 +32,6 @@ MODULE fftutil_utils
                                              fft_batchsize,&
                                              fft_numbuff
   USE fft_maxfft,                      ONLY: maxfft
-  USE fftkernal_utils,                 ONLY: z2y_fillsend,&
-                                             z2y_fillrecv,&
-                                             y2z_fillsend,&
-                                             y2z_fillrecv,&
-                                             y2z_voidrecv
   USE fftnew_utils,                    ONLY: locks_omp,&
                                              locks_omp_big,&
                                              locks_calc_1,&
@@ -87,7 +82,6 @@ MODULE fftutil_utils
 !TK
 !CLR special routines for new_gdist FFT
   PUBLIC :: set_psi_new_gdist
-  PUBLIC :: fft_comm_preinitialized
   PUBLIC :: fft_comm_ALL2ALL
   PUBLIC :: invfft_z_section
   PUBLIC :: invfft_y_section
@@ -1091,34 +1085,6 @@ CONTAINS
 
   END SUBROUTINE set_psi_new_gdist
 
-  SUBROUTINE fft_comm_preinitialized( tfft, remswitch, work_buffer, which )
-    IMPLICIT NONE
-
-    INTEGER, INTENT(IN)                         :: remswitch, work_buffer, which
-    TYPE(FFT_TYPE_DESCRIPTOR), INTENT(INOUT)    :: tfft
-
-    CHARACTER(*), PARAMETER :: procedureN = 'fft_com_preinit'
-
-    INTEGER :: ierr, isub, isub4
-
-!    IF( cntl%fft_tune_batchsize ) THEN
-!       CALL tiset(procedureN//'_tuning',isub4)
-!    ELSE
-!       CALL tiset(procedureN,isub)
-!    END IF
-
-    CALL MP_STARTALL( tfft%comm_sendrecv(1,tfft%which)+tfft%comm_sendrecv(2,tfft%which), parai%sendrecv_handle(:,work_buffer,remswitch,which) )
-
-    CALL MP_WAITALL( tfft%comm_sendrecv(1,tfft%which)+tfft%comm_sendrecv(2,tfft%which), parai%sendrecv_handle(:,work_buffer,remswitch,which) )
-
-!    IF( cntl%fft_tune_batchsize ) THEN
-!       CALL tihalt(procedureN//'_tuning',isub4)
-!    ELSE
-!       CALL tihalt(procedureN,isub)
-!    END IF
-
-  END SUBROUTINE fft_comm_preinitialized
-
   SUBROUTINE fft_comm_ALL2ALL( tfft, remswitch, work_buffer, which, comm_send, comm_recv, sendsize )
     USE mpi_f08
     IMPLICIT NONE
@@ -1176,9 +1142,40 @@ CONTAINS
   !------------------------------------------------------
   !-----------pack_z2y Start-----------------------------
 
-    CALL z2y_fillsend( tfft, aux, comm_mem_send, batch_size, remswitch, mythread, nss )
+    IF( parai%cp_nproc .ne. 1 ) THEN
 
-    CALL z2y_fillrecv( tfft, aux, comm_mem_recv, batch_size, remswitch, mythread, nss )
+       j = 0
+       DO l = 1, parai%nnode
+          DO m = 1, parai%node_nproc_overview( l )
+             j = j + 1
+!             IF( parai%cp_me+1 .eq. j ) CYCLE
+             !     ( Where am I on the node + to which proc does it go ) * Package size
+             offset = (j-1) * tfft%small_chunks(tfft%which) * batch_size
+             DO k = tfft%thread_z_start( mythread+1, remswitch, parai%me+1, tfft%which ), tfft%thread_z_end( mythread+1, remswitch, parai%me+1, tfft%which )
+                kdest = offset + tfft%nr3px * mod( (k-1), nss(parai%me+1) ) + ( (k-1) / nss(parai%me+1) ) * tfft%small_chunks(tfft%which)
+                DO i = 1, tfft%nr3p( j )
+                   comm_mem_send( kdest + i ) = aux( i + tfft%nr3p_offset( j ), k )
+                ENDDO
+             ENDDO
+          ENDDO
+       ENDDO
+
+    END IF
+
+    j = 0
+    DO l = 1, parai%nnode
+       DO m = 1, parai%node_nproc_overview( l )
+          j = j + 1
+          !     ( Where am I on the node + to which proc does it go ) * Package size
+          offset = (j-1) * tfft%small_chunks(tfft%which) * batch_size
+          DO k = tfft%thread_z_start( mythread+1, remswitch, parai%me+1, tfft%which ), tfft%thread_z_end( mythread+1, remswitch, parai%me+1, tfft%which )
+             kdest = offset + tfft%nr3px * mod( (k-1), nss(parai%me+1) ) + ( (k-1) / nss(parai%me+1) ) * tfft%small_chunks(tfft%which)
+             DO i = 1, tfft%nr3p( j )
+                comm_mem_recv( kdest + i ) = aux( i + tfft%nr3p_offset( j ), k )
+             ENDDO
+          ENDDO
+       ENDDO
+    ENDDO
 
   !------------pack_z2y End------------------------------
   !------------------------------------------------------
@@ -1400,9 +1397,32 @@ CONTAINS
         !------------------------------------------------------
         !-----------pack_y2z Start-----------------------------
 
-          CALL y2z_fillsend( tfft, aux2, comm_mem_send, batch_size, mythread, ispec, map_y2z )
+          offset2 =  (ispec-1) * tfft%small_chunks(tfft%which)
+          IF( parai%cp_nproc .ne. 1 ) THEN
 
-          CALL y2z_fillrecv( tfft, aux2, comm_mem_recv, batch_size, mythread, ispec, map_y2z )
+             i = 0
+             DO l = 1, parai%nnode
+                DO m = 1, parai%node_nproc_overview( l )
+                   i = i + 1
+!                   IF( parai%cp_me+1 .eq. i ) CYCLE
+                   offset = (i-1) * tfft%small_chunks(tfft%which) * batch_size
+                   DO j = tfft%thread_z_start( mythread+1, 3, i, tfft%which ), tfft%thread_z_end( mythread+1, 3, i, tfft%which )
+                      DO k = 1, tfft%my_nr3p
+                         comm_mem_send( offset + offset2 + (j-1)*tfft%nr3px + k ) = &
+                         aux( map_y2z( (i-1)*tfft%small_chunks(tfft%which) + (j-1)*tfft%nr3px + k ) )
+                      END DO
+                   END DO
+                END DO
+             END DO
+
+          END IF
+
+          DO j = tfft%thread_z_start( mythread+1, 3, parai%me+1, tfft%which ), tfft%thread_z_end( mythread+1, 3, parai%me+1, tfft%which )
+             DO k = 1, tfft%my_nr3p
+                comm_mem_recv( parai%cp_me * tfft%small_chunks(tfft%which) * batch_size + offset2 + (j-1)*tfft%nr3px + k ) = &
+                aux( map_y2z( parai%me*tfft%small_chunks(tfft%which) + (j-1)*tfft%nr3px + k ) )
+             END DO
+          END DO
 
         !------------pack_y2z End------------------------------
         !------------------------------------------------------
@@ -1435,7 +1455,19 @@ CONTAINS
   !------------------------------------------------------
   !----------unpack_y2z Start----------------------------
 
-    CALL y2z_voidrecv( tfft, comm_mem_recv, aux, batch_size, remswitch, mythread, factor, nss )
+    m = 0
+    DO j = 1, parai%nnode
+       DO l = 1, parai%node_nproc_overview( j )
+          m = m + 1
+          offset = (m-1) * tfft%small_chunks(tfft%which) * batch_size
+          DO k = tfft%thread_z_start( mythread+1, remswitch, parai%me+1, tfft%which ), tfft%thread_z_end( mythread+1, remswitch, parai%me+1, tfft%which )
+             kfrom = offset + tfft%nr3px * mod( k-1, nss(parai%me+1) ) + ( (k-1) / nss(parai%me+1) ) * tfft%small_chunks(tfft%which)
+             DO i = 1, tfft%nr3p( m )
+                aux( tfft%nr3p_offset( m ) + i, k ) = comm_mem_recv( kfrom + i ) * factor
+             ENDDO
+          ENDDO
+       ENDDO
+    ENDDO
 
   !-----------unpack_y2z End-----------------------------
   !------------------------------------------------------

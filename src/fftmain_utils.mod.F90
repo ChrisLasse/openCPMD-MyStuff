@@ -65,7 +65,6 @@ MODULE fftmain_utils
                                              pack_x2y_n,&
                                              unpack_y2x,&
                                              unpack_y2x_n,&
-                                             fft_comm_preinitialized,&
                                              fft_comm_ALL2ALL,&
                                              invfft_z_section,&
                                              invfft_y_section,&
@@ -970,7 +969,6 @@ CONTAINS
        !$OMP barrier
        !$OMP master
           CALL MPI_BARRIER( parai%allgrp, ierr )
-!          IF( tfft%do_comm(2) ) CALL fft_comm_preinitialized( tfft, 1, 1, 2 )
           IF( tfft%do_comm(2) ) CALL fft_comm_ALL2ALL( tfft, 1, 1, 2, comm_send(:,1), comm_recv(:,1), sendsize )
           CALL MPI_BARRIER( parai%allgrp, ierr )
        !$OMP end master
@@ -993,7 +991,6 @@ CONTAINS
        !$OMP barrier
        !$OMP master
           CALL MPI_BARRIER( parai%allgrp, ierr )
-!          IF( tfft%do_comm(2) ) CALL fft_comm_preinitialized( tfft, 1, 1, 2 )
           IF( tfft%do_comm(2) ) CALL fft_comm_ALL2ALL( tfft, 1, 1, 2, comm_send(:,1), comm_recv(:,1), sendsize )
           CALL MPI_BARRIER( parai%allgrp, ierr )
        !$OMP end master
