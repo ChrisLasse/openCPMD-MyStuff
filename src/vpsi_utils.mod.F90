@@ -64,8 +64,7 @@ MODULE vpsi_utils
                                              invfftn,&
                                              fwfftn_batch,&
                                              invfftn_batch,&
-                                             invfft_new_gdist_batch,&
-                                             fwfft_new_gdist_batch
+                                             fft_new_gdist_batch
   USE fftnew_utils,                    ONLY: setfftn,&
                                              fft_new_gdist_batch_setup,&
                                              Pre_Initialize_C2_Com,&
@@ -2270,7 +2269,7 @@ CONTAINS
                    ! ==  to swap                                                     ==
                    ! ==--------------------------------------------------------------==
                    swap=mod(ibatch,fft_numbuff)+1
-                   CALL invfft_new_gdist_batch( tfft, 1, bsize, 1, remswitch, mythread, counter(1), swap, f_inout1=aux_array(:,swap2:swap2), f_inout2=comm_send, f_inout3=comm_recv ) 
+                   CALL fft_new_gdist_batch( tfft, -1, 1, bsize, 1, remswitch, mythread, counter(1), swap, f_inout1=aux_array(:,swap2:swap2), f_inout2=comm_send, f_inout3=comm_recv ) 
                 END IF
              END IF
           END IF
@@ -2288,7 +2287,7 @@ CONTAINS
                 IF(bsize.NE.0)THEN
                    swap=mod(ibatch,fft_numbuff)+1
                    counter(2) = counter(2) + 1
-                   CALL invfft_new_gdist_batch( tfft, 2, bsize, 1, remswitch, mythread, counter(2), swap, f_inout1=comm_send, f_inout2=comm_recv )
+                   CALL fft_new_gdist_batch( tfft, -1, 2, bsize, 1, remswitch, mythread, counter(2), swap, f_inout1=comm_send, f_inout2=comm_recv )
                 END IF
              END IF
           END IF
@@ -2323,9 +2322,9 @@ CONTAINS
                       swap=mod(ibatch-start_loop1,fft_numbuff)+1
                       swap2=mod(ibatch-start_loop1,il_aux_array(2))+1
                       IF( ispec .eq. 1 ) counter(3) = counter(3) + 1
-                      CALL invfft_new_gdist_batch( tfft, 3, bsize, ispec, remswitch, mythread, counter(3), swap, &
+                      CALL fft_new_gdist_batch( tfft, -1, 3, bsize, ispec, remswitch, mythread, counter(3), swap, &
                                          f_inout1=comm_recv, f_inout2=aux_array(:,swap2:swap2) )
-                      CALL invfft_new_gdist_batch( tfft, 4, bsize, ispec, remswitch, mythread, counter(3), swap, &
+                      CALL fft_new_gdist_batch( tfft, -1, 4, bsize, ispec, remswitch, mythread, counter(3), swap, &
                                          f_inout1=aux_array(:,swap2:swap2), f_inout2=rs_wave(:,1:1) )
                    END IF
                 END IF
@@ -2395,8 +2394,8 @@ CONTAINS
                 ! ==------------------------------------------------------------==
                 ! == Back transform to reciprocal space the product V.PSI       ==
                 ! ==------------------------------------------------------------==
-                    CALL fwfft_new_gdist_batch( tfft, 1, bsize, ispec, remswitch, mythread, counter(4), swap, f_inout1=rs_wave(:,1:1) )
-                    CALL fwfft_new_gdist_batch( tfft, 2, bsize, ispec, remswitch, mythread, counter(4), swap, &
+                    CALL fft_new_gdist_batch( tfft, 1, 1, bsize, ispec, remswitch, mythread, counter(4), swap, f_inout1=rs_wave(:,1:1) )
+                    CALL fft_new_gdist_batch( tfft, 1, 2, bsize, ispec, remswitch, mythread, counter(4), swap, &
                                       f_inout1=rs_wave(:,1:1), f_inout2=aux_array(:,swap2:swap2), f_inout3=comm_send, f_inout4=comm_recv )
 
                     i_start2=i_start2+njump
@@ -2432,7 +2431,7 @@ CONTAINS
              IF(bsize.NE.0)THEN
                 swap=mod(ibatch-start_loop1,fft_numbuff)+1
                 counter(5) = counter(5) + 1
-                CALL fwfft_new_gdist_batch( tfft, 3, bsize, 1, remswitch, mythread, counter(5), swap, f_inout1=comm_send, f_inout2=comm_recv )
+                CALL fft_new_gdist_batch( tfft, 1, 3, bsize, 1, remswitch, mythread, counter(5), swap, f_inout1=comm_send, f_inout2=comm_recv )
              END IF
           END IF
        END IF
@@ -2468,7 +2467,7 @@ CONTAINS
                 swap=mod(ibatch-start_loop2,fft_numbuff)+1
                 swap2=mod(ibatch-start_loop2,il_aux_array(2))+1
                 counter(6) = counter(6) + 1
-                CALL fwfft_new_gdist_batch( tfft, 4, bsize, 1, remswitch, mythread, counter(6), swap, f_inout1=comm_recv, f_inout2=aux_array(:,swap2:swap2) )
+                CALL fft_new_gdist_batch( tfft, 1, 4, bsize, 1, remswitch, mythread, counter(6), swap, f_inout1=comm_recv, f_inout2=aux_array(:,swap2:swap2) )
                 IF( redist_c2 .and. cnti%C2_strat .eq. 3 ) THEN
                    CALL calc_c2_new_gdist_strat3( aux_array(:,swap2), c2(:, i_start3+1+(counter(6)-1)*fft_batchsize*2 : i_start3+bsize*2+(counter(6)-1)*fft_batchsize*2), &
                                           c2_com_send(:,((counter(6)-1)/3)+1), c0(:, i_start3+1+(counter(6)-1)*fft_batchsize*2 : i_start3+bsize*2+(counter(6)-1)*fft_batchsize*2 ), &

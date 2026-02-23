@@ -112,9 +112,7 @@ MODULE fftmain_utils
   PUBLIC :: invfftn_batch
   PUBLIC :: fwfftn_batch
 
-  PUBLIC :: invfft_new_gdist_batch
-  PUBLIC :: fwfft_new_gdist_batch
-
+  PUBLIC :: fft_new_gdist_batch
 
 CONTAINS
 
@@ -768,94 +766,6 @@ CONTAINS
     END IF
     ! ==--------------------------------------------------------------==
   END SUBROUTINE invfftn_batch
-
-  SUBROUTINE invfft_new_gdist_batch( tfft, step, batch_size, ispec, remswitch, mythread, counter, work_buffer, f_inout1, f_inout2, f_inout3, f_inout4 )
-    IMPLICIT NONE
-
-    TYPE(FFT_TYPE_DESCRIPTOR), INTENT(INOUT) :: tfft
-    INTEGER, INTENT(IN) :: step, batch_size, remswitch, mythread, counter, work_buffer, ispec
-    COMPLEX(real_8), OPTIONAL, INTENT(INOUT) :: f_inout1(:,:)
-    COMPLEX(real_8), OPTIONAL, INTENT(INOUT) :: f_inout2(:,:)
-    COMPLEX(real_8), OPTIONAL, INTENT(INOUT) :: f_inout3(:,:)
-    COMPLEX(real_8), OPTIONAL, INTENT(INOUT) :: f_inout4(:,:)
-
-    CHARACTER(*), PARAMETER :: procedureN = 'invfft_new_gdist_batch'
-
-    INTEGER :: isub, isub4
-
-    IF( cntl%fft_tune_batchsize ) THEN
-       IF( parai%ncpus_FFT .eq. 1 .or. mythread .eq. 1 ) CALL tiset(procedureN//'_tuning',isub4)
-    ELSE
-!       IF( parai%ncpus_FFT .eq. 1 .or. mythread .eq. 1 ) CALL tiset(procedureN,isub)
-       CALL tiset(procedureN,isub)
-    END IF
-
-    IF( step .eq. 1 ) THEN
-       CALL fft_new_gdist_batch( tfft, -1, step, batch_size, ispec, remswitch, mythread, counter, work_buffer, &
-                                f_inout1=f_inout1, f_inout2=f_inout2, f_inout3=f_inout3, f_inout4=f_inout4 )
-    ELSE IF( step .eq. 2 ) THEN
-       CALL fft_new_gdist_batch( tfft, -1, step, batch_size, ispec, remswitch, mythread, counter, work_buffer, &
-                                f_inout1=f_inout1, f_inout2=f_inout2 )
-    ELSE IF( step .eq. 3 ) THEN
-       CALL fft_new_gdist_batch( tfft, -1, step, batch_size, ispec, remswitch, mythread, counter, work_buffer, &
-                                f_inout1=f_inout1, f_inout2=f_inout2, f_inout3=f_inout3, f_inout4=f_inout4 )
-    ELSE IF( step .eq. 4 ) THEN
-       CALL fft_new_gdist_batch( tfft, -1, step, batch_size, ispec, remswitch, mythread, counter, work_buffer, &
-                                f_inout1=f_inout1, f_inout2=f_inout2, f_inout3=f_inout3, f_inout4=f_inout4 )
-    END IF
-
-    IF( cntl%fft_tune_batchsize ) THEN
-       IF( parai%ncpus_FFT .eq. 1 .or. mythread .eq. 1 ) CALL tihalt(procedureN//'_tuning',isub4)
-    ELSE
-!       IF( parai%ncpus_FFT .eq. 1 .or. mythread .eq. 1 ) CALL tihalt(procedureN,isub)
-       CALL tihalt(procedureN,isub)
-    END IF
-
-  END SUBROUTINE invfft_new_gdist_batch
-
-  SUBROUTINE fwfft_new_gdist_batch( tfft, step, batch_size, ispec, remswitch, mythread, counter, work_buffer, f_inout1, f_inout2, f_inout3, f_inout4 )
-    IMPLICIT NONE
-
-    TYPE(FFT_TYPE_DESCRIPTOR), INTENT(INOUT) :: tfft
-    INTEGER, INTENT(IN) :: step, batch_size, remswitch, mythread, counter, work_buffer, ispec
-    COMPLEX(real_8), OPTIONAL, INTENT(INOUT) :: f_inout1(:,:)
-    COMPLEX(real_8), OPTIONAL, INTENT(INOUT) :: f_inout2(:,:)
-    COMPLEX(real_8), OPTIONAL, INTENT(INOUT) :: f_inout3(:,:)
-    COMPLEX(real_8), OPTIONAL, INTENT(INOUT) :: f_inout4(:,:)
-
-    CHARACTER(*), PARAMETER :: procedureN = 'fwfft_new_gdist_batch'
-
-    INTEGER :: isub, isub4
-
-    IF( cntl%fft_tune_batchsize ) THEN
-       IF( parai%ncpus_FFT .eq. 1 .or. mythread .eq. 1 ) CALL tiset(procedureN//'_tuning',isub4)
-    ELSE
-!       IF( parai%ncpus_FFT .eq. 1 .or. mythread .eq. 1 ) CALL tiset(procedureN,isub)
-       CALL tiset(procedureN,isub)
-    END IF
-
-    IF( step .eq. 1 ) THEN
-       CALL fft_new_gdist_batch( tfft, 1, step, batch_size, ispec, remswitch, mythread, counter, work_buffer, &
-                                f_inout1=f_inout1, f_inout2=f_inout2, f_inout3=f_inout3, f_inout4=f_inout4 )
-    ELSE IF( step .eq. 2 ) THEN
-       CALL fft_new_gdist_batch( tfft, 1, step, batch_size, ispec, remswitch, mythread, counter, work_buffer, &
-                                f_inout1=f_inout1, f_inout2=f_inout2, f_inout3=f_inout3, f_inout4=f_inout4 )
-    ELSE IF( step .eq. 3 ) THEN
-       CALL fft_new_gdist_batch( tfft, 1, step, batch_size, ispec, remswitch, mythread, counter, work_buffer, &
-                                f_inout1=f_inout1, f_inout2=f_inout2 )
-    ELSE IF( step .eq. 4 ) THEN
-       CALL fft_new_gdist_batch( tfft, 1, step, batch_size, ispec, remswitch, mythread, counter, work_buffer, &
-                                f_inout1=f_inout1, f_inout2=f_inout2, f_inout3=f_inout3, f_inout4=f_inout4 )
-    END IF
-
-    IF( cntl%fft_tune_batchsize ) THEN
-       IF( parai%ncpus_FFT .eq. 1 .or. mythread .eq. 1 ) CALL tihalt(procedureN//'_tuning',isub4)
-    ELSE
-!       IF( parai%ncpus_FFT .eq. 1 .or. mythread .eq. 1 ) CALL tihalt(procedureN,isub)
-       CALL tihalt(procedureN,isub)
-    END IF
-
-  END SUBROUTINE fwfft_new_gdist_batch
 
   SUBROUTINE fft_new_gdist_batch( tfft, isign, step, batch_size, ispec, remswitch, mythread, counter, work_buffer, f_inout1, f_inout2, f_inout3, f_inout4 )
     IMPLICIT NONE
