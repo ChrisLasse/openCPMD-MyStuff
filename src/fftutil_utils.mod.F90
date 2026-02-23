@@ -1148,7 +1148,6 @@ CONTAINS
        DO l = 1, parai%nnode
           DO m = 1, parai%node_nproc_overview( l )
              j = j + 1
-!             IF( parai%cp_me+1 .eq. j ) CYCLE
              !     ( Where am I on the node + to which proc does it go ) * Package size
              offset = (j-1) * tfft%small_chunks(tfft%which) * batch_size
              DO k = tfft%thread_z_start( mythread+1, remswitch, parai%me+1, tfft%which ), tfft%thread_z_end( mythread+1, remswitch, parai%me+1, tfft%which )

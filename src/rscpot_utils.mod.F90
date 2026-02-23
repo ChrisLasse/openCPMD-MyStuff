@@ -117,11 +117,7 @@ CONTAINS
             .OR.(lqmmm%qmmm .AND. iqmmm%coupl_model.EQ.0)
        IF (dorho) THEN
           IF(batch_fft)THEN
-             IF( cntl%new_gdist ) THEN
-                CALL rhoofr_new_gdist_batchfft(c0,rhoe,psi(:,1),nstate)
-             ELSE
-                CALL rhoofr_batchfft(c0,rhoe,psi(:,1),nstate)
-             END IF
+             CALL rhoofr_new_gdist_batchfft(c0,rhoe,psi(:,1),nstate)
           ELSE
              CALL rhoofr(c0,rhoe,psi(:,1),nstate)
           END IF

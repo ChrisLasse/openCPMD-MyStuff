@@ -657,11 +657,7 @@ CONTAINS
        CALL fftnew_cuda(isign,f,sparse, comm, thread_view=thread_view, &
             & copy_data_to_device=copy_data_to_device, copy_data_to_host=copy_data_to_host )
     ELSE
-       IF( cntl%new_gdist ) THEN
-          CALL fft_new_gdist( isign, tfft, f, tfft%nhg, tfft%nr1p, tfft%nsp )
-       ELSE
-          CALL fftnew(isign,f,sparse, parai%allgrp )
-       END IF
+       CALL fft_new_gdist( isign, tfft, f, tfft%nhg, tfft%nr1p, tfft%nsp )
     ENDIF
     CALL tihalt(procedureN,isub)
     ! ==--------------------------------------------------------------==
@@ -700,11 +696,7 @@ CONTAINS
        CALL fftnew_cuda(isign,f,sparse, comm, thread_view=thread_view, &
             & copy_data_to_device=copy_data_to_device, copy_data_to_host=copy_data_to_host )
     ELSE
-       IF( cntl%new_gdist ) THEN
-          CALL fft_new_gdist( isign, tfft, f, tfft%nhg, tfft%nr1p, tfft%nsp )
-       ELSE
-          CALL fftnew(isign,f,sparse, parai%allgrp )
-       END IF
+       CALL fft_new_gdist( isign, tfft, f, tfft%nhg, tfft%nr1p, tfft%nsp )
     ENDIF
     CALL tihalt(procedureN,isub)
     ! ==--------------------------------------------------------------==

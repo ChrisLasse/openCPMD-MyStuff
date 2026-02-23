@@ -356,13 +356,8 @@ CONTAINS
 
     DO ik=1,nkpoint
        IF(batch_fft.AND..NOT.tkpts%tkpnt)THEN
-          IF( cntl%new_gdist ) THEN
-             CALL vpsi_new_gdist_batchfft(c0_ptr(:,:,ik),c2,crge%f(:,1),rhoe,psi(:,1),nstate,ik,&
-                  clsd%nlsd,redist_c2)
-          ELSE
-             CALL vpsi_batchfft(c0_ptr(:,:,ik),c2,crge%f(:,1),rhoe,psi(:,1),nstate,ik,&
-                  clsd%nlsd,redist_c2)
-          END IF
+          CALL vpsi_new_gdist_batchfft(c0_ptr(:,:,ik),c2,crge%f(:,1),rhoe,psi(:,1),nstate,ik,&
+               clsd%nlsd,redist_c2)
        ELSE
           CALL vpsi(c0_ptr(:,:,ik),c2,crge%f(:,1),rhoe,psi(:,1),nstate,ik,clsd%nlsd,&
                redist_c2)

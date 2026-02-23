@@ -2145,34 +2145,7 @@ CONTAINS
 
     tfft%which_wave = 2
 
-    IF( cntl%fft_distmem ) THEN
-       locks_cc_invfw = .true.
-    ELSE
-       locks_cc_invfw(:,:,1) = .true.
-       locks_cc_invfw(:,:,3) = .true.
-       IF( tfft%do_comm(1) ) THEN
-          locks_cc_invfw( parai%node_me+1, :, 2 ) = .true.
-          locks_cc_invfw( parai%node_me+1, :, 4 ) = .true.
-       ELSE
-          locks_cc_invfw( parai%node_me+1, :, 2 ) = .false.
-          locks_cc_invfw( parai%node_me+1, :, 4 ) = .false.
-       END IF
-
-       locks_calc_1   = .true.
-       locks_calc_2   = .true.
-       IF( .not. cntl%krwfn ) THEN
-          DO i = 1, fft_batchsize*fft_numbuff
-             locks_calc_1( : , i ) = .false.
-          ENDDO
-       ELSE
-          DO i = 1, fft_batchsize*fft_numbuff
-             locks_calc_2( : , i ) = .false.
-          ENDDO
-       END IF
-       locks_sing_1   = .true.
-       locks_sing_2   = .true.
-    END IF
-
+    locks_cc_invfw = .true.
 
     locks_omp   = .true.
     IF( cntl%overlapp_comm_comp .and. tfft%do_comm(1) ) locks_omp( 1, :, : ) = .false.

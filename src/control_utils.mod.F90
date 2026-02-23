@@ -3715,29 +3715,11 @@ CONTAINS
                 ELSE
                    cntl%overlapp_comm_comp=.TRUE.
                 ENDIF
-             ELSEIF ( keyword_contains(line,'USE_OLD_GDIST') ) THEN
-                IF ( keyword_contains(line,'ON') ) THEN
-                   cntl%new_gdist=.FALSE.
-                ELSE
-                   cntl%new_gdist=.TRUE.
-                ENDIF
-             ELSEIF ( keyword_contains(line,'USE_OLD_FFT') ) THEN
-                IF ( keyword_contains(line,'ON') ) THEN
-                   cntl%new_gdist=.FALSE.
-                ELSE
-                   cntl%new_gdist=.TRUE.
-                ENDIF
              ELSEIF ( keyword_contains(line,'USE_OLD_CP_ORDERING') ) THEN
                 IF ( keyword_contains(line,'ON') ) THEN
                    cntl%old_cp_ordering=.TRUE.
                 ELSE
                    cntl%old_cp_ordering=.FALSE.
-                ENDIF
-             ELSEIF ( keyword_contains(line,'USE_FFT_DISTMEM') ) THEN
-                IF ( keyword_contains(line,'ON') ) THEN
-                   cntl%fft_distmem=.TRUE.
-                ELSE
-                   cntl%fft_distmem=.FALSE.
                 ENDIF
              ELSEIF ( keyword_contains(line,'BLOCKSIZE_USPP') ) THEN
                 READ(iunit,'(A)',iostat=ierr) line

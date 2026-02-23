@@ -50,13 +50,8 @@ CONTAINS
           IF(it.LE.fft_tune_max_it.AND.batch_fft)THEN
              rsactive = cntl%krwfn
              CALL autotune_fftbatchsize()
-             IF( cntl%new_gdist ) THEN
-                CALL rhoofr_new_gdist_batchfft(c0,rhoe,psi(:,1),nstate)
-                CALL vpsi_new_gdist_batchfft(c0,c2,crge%f(:,1),rhoe,psi(:,1),nstate,1,clsd%nlsd,.TRUE.)
-             ELSE
-                CALL rhoofr_batchfft(c0,rhoe,psi(:,1),nstate)
-                CALL vpsi_batchfft(c0,c2,crge%f(:,1),rhoe,psi(:,1),nstate,1,clsd%nlsd,.TRUE.)
-             END IF
+             CALL rhoofr_new_gdist_batchfft(c0,rhoe,psi(:,1),nstate)
+             CALL vpsi_new_gdist_batchfft(c0,c2,crge%f(:,1),rhoe,psi(:,1),nstate,1,clsd%nlsd,.TRUE.)
              rsactive = .FALSE.
           END IF
        END DO

@@ -702,12 +702,9 @@ CONTAINS
     cntl%use_elpa_autotune=.FALSE.
     !CLR which C2 communication scheme to use
     cnti%C2_strat=1
-    !CLR controls switch between old and new gdistribution in FFT
-    cntl%new_gdist=.TRUE.
     !CLR OLD(TRUE) : Consecutive tasks are part of alternating CP-groups
     !    NEW(FALSE): Consecutive tasks are part of consecutive CP-groups
     cntl%old_cp_ordering=.FALSE.
-    cntl%fft_distmem=.FALSE.
     RETURN
   END SUBROUTINE control_def
   ! ==================================================================
