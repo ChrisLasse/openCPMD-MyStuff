@@ -1403,12 +1403,11 @@ CONTAINS
              DO l = 1, parai%nnode
                 DO m = 1, parai%node_nproc_overview( l )
                    i = i + 1
-!                   IF( parai%cp_me+1 .eq. i ) CYCLE
                    offset = (i-1) * tfft%small_chunks(tfft%which) * batch_size
                    DO j = tfft%thread_z_start( mythread+1, 3, i, tfft%which ), tfft%thread_z_end( mythread+1, 3, i, tfft%which )
                       DO k = 1, tfft%my_nr3p
                          comm_mem_send( offset + offset2 + (j-1)*tfft%nr3px + k ) = &
-                         aux( map_y2z( (i-1)*tfft%small_chunks(tfft%which) + (j-1)*tfft%nr3px + k ) )
+                         aux2( map_y2z( (i-1)*tfft%small_chunks(tfft%which) + (j-1)*tfft%nr3px + k ) )
                       END DO
                    END DO
                 END DO
@@ -1419,7 +1418,7 @@ CONTAINS
           DO j = tfft%thread_z_start( mythread+1, 3, parai%me+1, tfft%which ), tfft%thread_z_end( mythread+1, 3, parai%me+1, tfft%which )
              DO k = 1, tfft%my_nr3p
                 comm_mem_recv( parai%cp_me * tfft%small_chunks(tfft%which) * batch_size + offset2 + (j-1)*tfft%nr3px + k ) = &
-                aux( map_y2z( parai%me*tfft%small_chunks(tfft%which) + (j-1)*tfft%nr3px + k ) )
+                aux2( map_y2z( parai%me*tfft%small_chunks(tfft%which) + (j-1)*tfft%nr3px + k ) )
              END DO
           END DO
 
