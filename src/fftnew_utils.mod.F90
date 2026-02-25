@@ -861,6 +861,7 @@ CONTAINS
 
        IF( rem_size .eq. 0 ) THEN
 
+!CLR: Part 1
           IF( batch_size .gt. 1 ) THEN
 
              DO i = 1+overlap_cor, parai%ncpus_FFT
@@ -888,6 +889,7 @@ CONTAINS
 
        ELSE
 
+!CLR: Part 2
           IF( rem_size .gt. 1 ) THEN
 
              DO i = 1+overlap_cor, parai%ncpus_FFT
@@ -915,6 +917,7 @@ CONTAINS
 
        END IF
 
+!CLR: Part 3
        DO i = 1+overlap_cor, parai%ncpus_FFT
           tfft%thread_prepare_sticks( i, 2 ) = nss( parai%me+1 ) / eff_nthreads
        ENDDO
@@ -929,6 +932,20 @@ CONTAINS
        DO i = 1+overlap_cor, parai%ncpus_FFT
           tfft%thread_prepare_end( i, 2 ) = tfft%thread_prepare_start( i, 2 ) + tfft%thread_prepare_sticks( i, 2 ) - 1
        ENDDO
+
+
+!CLR: Why this complicated for set_psi_new_gdist? 
+!     During normal work: no need for extra maps, tfft%thread_z_sticks and its remainder protection works perfectly well.
+!     Problem: At the end of the loop over states if nstate is not even, a single state could remain on its own -> no combination of 
+!              two states possible
+!     Example: Normally a batch_size of 5 assumes 10 states packed together; in this last case only 9 are present
+!     Part 1: there is no remainder, so we have a batch_size of 5 till the end, but the last one just has 9 states
+!          -> for the last execution tfft%thread_prepare_sticks( :, 1 ) is build equal to tfft%thread_z_sticks just with an effective
+!             batch_size of 4
+!     Part 2: remainder larger than 1 (so rem_size > 1, remaining states at least 3)
+!          -> same as Part 1 but with a rem_size of rem_size - 1
+!     Part 3: in both prior cases and in the special case where the remainder is equal 1, the single, last, unpaired state remains
+!          -> handled specially without pairing in tfft%thread_prepare_sticks( :, 2 )
 
     END IF
 
