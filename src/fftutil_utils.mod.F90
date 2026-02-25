@@ -1318,9 +1318,7 @@ CONTAINS
     INTEGER :: l, m, i, offset, j, k, ibatch, jter, offset2
     CHARACTER(*), PARAMETER :: procedureN = 'fwfft_y_section'
 
-    Call First_Part_y_section( aux2_r )
-
-    Call Second_Part_y_section( aux2_r )
+    Call First_and_Second_Part_y_section( aux2_r )
 
     !$  locks_omp_big( mythread+1, ispec, counter, 6 ) = .false.
     !$omp flush( locks_omp_big )
@@ -1332,7 +1330,7 @@ CONTAINS
 
     CONTAINS
 
-      SUBROUTINE First_Part_y_section( aux2 )
+      SUBROUTINE First_and_Second_Part_y_section( aux2 )
         Implicit NONE
         COMPLEX(real_8), INTENT(INOUT) :: aux2( fpar%kr2s, * )
 
@@ -1348,12 +1346,6 @@ CONTAINS
         !----------transpose x2y End---------------------------
         !------------------------------------------------------
 
-      END SUBROUTINE First_Part_y_section
-
-      SUBROUTINE Second_Part_y_section( aux2 )
-        Implicit NONE
-        COMPLEX(real_8), INTENT(INOUT) :: aux2( fpar%kr2s, * )
-
         !------------------------------------------------------
         !------------y-FFT Start-------------------------------
 
@@ -1366,7 +1358,7 @@ CONTAINS
         !-------------y-FFT End--------------------------------
         !------------------------------------------------------
 
-      END SUBROUTINE Second_Part_y_section
+      END SUBROUTINE First_and_Second_Part_y_section
 
       SUBROUTINE Third_Part_y_section( aux2 )
 
@@ -1387,7 +1379,7 @@ CONTAINS
                    DO j = tfft%thread_z_start( mythread+1, 3, i, tfft%sparse ), tfft%thread_z_end( mythread+1, 3, i, tfft%sparse )
                       DO k = 1, tfft%my_nr3p
                          comm_mem_send( offset + offset2 + (j-1)*tfft%nr3px + k ) = &
-                         aux2( map_y2z( (i-1)*tfft%small_chunks(tfft%sparse) + (j-1)*tfft%nr3px + k ) )
+                         aux2( map_y2z( k + (i-1)*tfft%small_chunks(tfft%sparse) + (j-1)*tfft%nr3px ) )
                       END DO
                    END DO
                 END DO
@@ -1398,7 +1390,7 @@ CONTAINS
           DO j = tfft%thread_z_start( mythread+1, 3, parai%me+1, tfft%sparse ), tfft%thread_z_end( mythread+1, 3, parai%me+1, tfft%sparse )
              DO k = 1, tfft%my_nr3p
                 comm_mem_recv( parai%cp_me * tfft%small_chunks(tfft%sparse) * batch_size + offset2 + (j-1)*tfft%nr3px + k ) = &
-                aux2( map_y2z( parai%me*tfft%small_chunks(tfft%sparse) + (j-1)*tfft%nr3px + k ) )
+                aux2( map_y2z( k + parai%me*tfft%small_chunks(tfft%sparse) + (j-1)*tfft%nr3px ) )
              END DO
           END DO
 
