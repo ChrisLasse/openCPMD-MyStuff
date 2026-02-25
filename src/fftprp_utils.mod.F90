@@ -793,11 +793,11 @@ CONTAINS
     ALLOCATE( tfft%map_transpose_y2x( fpar%nnr1, 2 ), STAT=ierr )
     IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
        __LINE__,__FILE__)
-    ALLOCATE( tfft%map_transpose_x2y ( fpar%nnr1, 2 ), STAT=ierr )
+    ALLOCATE( tfft%map_transpose_x2y( fpar%kr2s, tfft%nr1p*tfft%my_nr3p, 2 ), STAT=ierr )
     IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&
        __LINE__,__FILE__)
-    CALL Make_packing_Maps( tfft%map_transpose_y2x(:,1), tfft%map_transpose_x2y(:,1), tfft%zero_transpose_y2x_start(1), tfft%zero_transpose_y2x_end(1), tfft%nr1w, tfft%indw )
-    CALL Make_packing_Maps( tfft%map_transpose_y2x(:,2), tfft%map_transpose_x2y(:,2), tfft%zero_transpose_y2x_start(2), tfft%zero_transpose_y2x_end(2), tfft%nr1p, tfft%indp )
+    CALL Make_packing_Maps( tfft%map_transpose_y2x(:,1), tfft%map_transpose_x2y(:,:,1), tfft%zero_transpose_y2x_start(1), tfft%zero_transpose_y2x_end(1), tfft%nr1w, tfft%indw )
+    CALL Make_packing_Maps( tfft%map_transpose_y2x(:,2), tfft%map_transpose_x2y(:,:,2), tfft%zero_transpose_y2x_start(2), tfft%zero_transpose_y2x_end(2), tfft%nr1p, tfft%indp )
 
     !Packing z2y
     ALLOCATE( tfft%map_z2y_bounds( tfft%nr1p, 8, 2 ), STAT=ierr )
@@ -971,7 +971,7 @@ CONTAINS
 
         INTEGER, INTENT(IN)  :: nr1s
         INTEGER, INTENT(IN)  :: inds( fpar%kr1s )
-        INTEGER, INTENT(OUT) :: map_transpose_y2x(:), map_transpose_x2y(:)
+        INTEGER, INTENT(OUT) :: map_transpose_y2x(:), map_transpose_x2y(:,:)
         INTEGER, INTENT(OUT) :: zero_transpose_y2x_start, zero_transpose_y2x_end
 
         INTEGER :: sendsize, dest, i, j, l
@@ -1013,7 +1013,7 @@ CONTAINS
         DO i = 1, nr1s * tfft%my_nr3p
            dest = inds(mod((i-1),nr1s)+1) + ((i-1)/nr1s)*fpar%kr1s*fpar%kr2s
            DO j = 1, fpar%kr2s
-              map_transpose_x2y( j + fpar%kr2s * (i-1) ) = dest
+              map_transpose_x2y( j, i ) = dest
               dest = dest + fpar%kr1s
            ENDDO
         ENDDO

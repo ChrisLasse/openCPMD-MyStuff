@@ -1242,62 +1242,42 @@ CONTAINS
     INTEGER, INTENT(IN) :: mythread, my_nr1s
     TYPE(FFT_TYPE_DESCRIPTOR), INTENT(INOUT) :: tfft
     COMPLEX(real_8), INTENT(INOUT) :: aux2( * )
-    COMPLEX(real_8), INTENT(INOUT) :: aux_r( : )
+    COMPLEX(real_8), INTENT(INOUT) :: aux_r( fpar%kr1s, * )
 
     CHARACTER(*), PARAMETER :: procedureN = 'invfft_x_section'
 
     INTEGER :: i, k, offset
 
-    Call First_Part_x_section( aux_r )
+    !------------------------------------------------------
+    !---------transpose y2x Start--------------------------
 
-    Call Second_Part_x_section( aux_r )
+      DO i = tfft%thread_x_start( mythread+1, tfft%sparse ), tfft%thread_x_end( mythread+1, tfft%sparse )
+         offset = (i-1) * fpar%kr1s
+         DO k = 1, tfft%zero_transpose_y2x_start( tfft%sparse ) - 1
+            aux_r( k, i ) = aux2( tfft%map_transpose_y2x( offset + k, tfft%sparse ) )
+         END DO
+         DO k = tfft%zero_transpose_y2x_start( tfft%sparse ), tfft%zero_transpose_y2x_end( tfft%sparse )
+            aux_r( k, i ) = (0.0_real_8, 0.0_real_8)
+         END DO
+         DO k = tfft%zero_transpose_y2x_end( tfft%sparse ) + 1, fpar%kr1s
+            aux_r( k, i ) = aux2( tfft%map_transpose_y2x( offset + k, tfft%sparse ) )
+         END DO
+      END DO
 
-    CONTAINS
+    !----------transpose y2x End---------------------------
+    !------------------------------------------------------
 
-      SUBROUTINE First_Part_x_section( aux_r )
+    !------------------------------------------------------
+    !------------x-FFT Start-------------------------------
 
-        IMPLICIT NONE
-        COMPLEX(real_8), INTENT(INOUT) :: aux_r( * )
+      CALL mltfft_fftw_threadsafe('n','n',aux_r( : , tfft%thread_x_start( mythread+1, tfft%sparse ) : tfft%thread_x_end( mythread+1, tfft%sparse ) ), &
+                       fpar%kr1s, tfft%thread_x_sticks(mythread+1, tfft%sparse), &
+                       aux_r( :, tfft%thread_x_start( mythread+1, tfft%sparse ) : tfft%thread_x_end( mythread+1, tfft%sparse ) ), &
+                       fpar%kr1s, tfft%thread_x_sticks(mythread+1, tfft%sparse), &
+                       fpar%kr1s, tfft%thread_x_sticks(mythread+1, tfft%sparse),-1,scal,.FALSE.,mythread,parai%ncpus_FFT)
 
-        !------------------------------------------------------
-        !---------transpose y2x Start--------------------------
-
-          DO i = tfft%thread_x_start( mythread+1, tfft%sparse ), tfft%thread_x_end( mythread+1, tfft%sparse )
-             offset = (i-1) * fpar%kr1s
-             DO k = 1, tfft%zero_transpose_y2x_start( tfft%sparse ) - 1
-                aux_r( offset + k ) = aux2( tfft%map_transpose_y2x( offset + k, tfft%sparse ) )
-             END DO
-             DO k = tfft%zero_transpose_y2x_start( tfft%sparse ), tfft%zero_transpose_y2x_end( tfft%sparse )
-                aux_r( offset + k ) = (0.0_real_8, 0.0_real_8)
-             END DO
-             DO k = tfft%zero_transpose_y2x_end( tfft%sparse ) + 1, fpar%kr1s
-                aux_r( offset + k ) = aux2( tfft%map_transpose_y2x( offset + k, tfft%sparse ) )
-             END DO
-          END DO
-
-        !----------transpose y2x End---------------------------
-        !------------------------------------------------------
-
-      END SUBROUTINE First_Part_x_section
-
-      SUBROUTINE Second_Part_x_section( aux_r )
-
-        Implicit NONE
-        COMPLEX(real_8), INTENT(INOUT) :: aux_r( fpar%kr1s , * )
-
-        !------------------------------------------------------
-        !------------x-FFT Start-------------------------------
-
-          CALL mltfft_fftw_threadsafe('n','n',aux_r( : , tfft%thread_x_start( mythread+1, tfft%sparse ) : tfft%thread_x_end( mythread+1, tfft%sparse ) ), &
-                           fpar%kr1s, tfft%thread_x_sticks(mythread+1, tfft%sparse), &
-                           aux_r( :, tfft%thread_x_start( mythread+1, tfft%sparse ) : tfft%thread_x_end( mythread+1, tfft%sparse ) ), &
-                           fpar%kr1s, tfft%thread_x_sticks(mythread+1, tfft%sparse), &
-                           fpar%kr1s, tfft%thread_x_sticks(mythread+1, tfft%sparse),-1,scal,.FALSE.,mythread,parai%ncpus_FFT)
-
-        !-------------x-FFT End--------------------------------
-        !------------------------------------------------------
-
-      END SUBROUTINE Second_Part_x_section
+    !-------------x-FFT End--------------------------------
+    !------------------------------------------------------
 
   END SUBROUTINE invfft_x_section
 
@@ -1354,14 +1334,14 @@ CONTAINS
 
       SUBROUTINE First_Part_y_section( aux2 )
         Implicit NONE
-        COMPLEX(real_8), INTENT(INOUT) :: aux2( * )
+        COMPLEX(real_8), INTENT(INOUT) :: aux2( fpar%kr2s, * )
 
         !------------------------------------------------------
         !---------transpose x2y Start--------------------------
 
           DO i = tfft%thread_y_start( mythread+1, tfft%sparse ), tfft%thread_y_end( mythread+1, tfft%sparse )
              DO j = 1, fpar%kr2s
-                aux2( j + (i-1) * fpar%kr2s ) = aux( tfft%map_transpose_x2y( j + (i-1) * fpar%kr2s, tfft%sparse ) )
+                aux2( j, i ) = aux( tfft%map_transpose_x2y( j, i, tfft%sparse ) )
              ENDDO
           ENDDO
 

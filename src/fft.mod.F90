@@ -133,7 +133,7 @@ MODULE fft
 
      INTEGER, ALLOCATABLE :: map_set_psi(:,:)
      INTEGER, ALLOCATABLE :: map_transpose_y2x(:,:)
-     INTEGER, ALLOCATABLE :: map_transpose_x2y(:,:)
+     INTEGER, ALLOCATABLE :: map_transpose_x2y(:,:,:)
      INTEGER :: zero_transpose_y2x_start( 2 )
      INTEGER :: zero_transpose_y2x_end( 2 )
      INTEGER, ALLOCATABLE :: map_y2z(:,:)
