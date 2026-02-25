@@ -74,10 +74,6 @@ MODULE fftnew_utils
   PUBLIC :: locks_calc_fw
   LOGICAL, POINTER, SAVE, CONTIGUOUS :: locks_com_fw(:,:)
   PUBLIC :: locks_com_fw
-  LOGICAL, POINTER, SAVE, CONTIGUOUS :: locks_sing_1(:,:)
-  PUBLIC :: locks_sing_1
-  LOGICAL, POINTER, SAVE, CONTIGUOUS :: locks_sing_2(:,:)
-  PUBLIC :: locks_sing_2
   LOGICAL, POINTER, SAVE, CONTIGUOUS :: locks_cc_invfw(:,:,:)
   PUBLIC :: locks_cc_invfw
   LOGICAL, ALLOCATABLE, SAVE :: locks_omp(:,:,:)
@@ -1169,173 +1165,104 @@ CONTAINS
     CALL MP_SUM( com_matrix  , parai%nproc*parai%cp_nogrp, parai%cp_grp )
     CALL MP_SUM( fft_info    ,           4*parai%cp_nogrp, parai%cp_grp )
 
-    IF( cnti%C2_strat .eq. 2 ) THEN
-
-       IF( allocated( parai%c2_send_handle ) ) DEALLOCATE( parai%c2_send_handle )
-       ALLOCATE( parai%c2_send_handle( fft_batchsize*2*(parai%cp_nogrp-1) ,fft_numbatches+1 ) )
+    IF( allocated( parai%c2_send_handle ) ) DEALLOCATE( parai%c2_send_handle )
+    ALLOCATE( parai%c2_send_handle( fft_batchsize*2*(parai%cp_nogrp-1) ,fft_numbatches+1 ) )
    
-       IF( .not. allocated( parai%c2_send_handle_counter ) ) ALLOCATE( parai%c2_send_handle_counter( nstate ) )
-       IF( .not. allocated( parai%c2_recv_handle_counter ) ) ALLOCATE( parai%c2_recv_handle_counter( nstate ) )
+    IF( .not. allocated( parai%c2_send_handle_counter ) ) ALLOCATE( parai%c2_send_handle_counter( nstate ) )
+    IF( .not. allocated( parai%c2_recv_handle_counter ) ) ALLOCATE( parai%c2_recv_handle_counter( nstate ) )
    
-       IF( allocated( c2_com_num ) ) DEALLOCATE( c2_com_num )
-       ALLOCATE( c2_com_num( fft_numbatches+1, 4 ) )
-     
-       c2_com_num = 0
+    IF( allocated( c2_com_num ) ) DEALLOCATE( c2_com_num )
+    ALLOCATE( c2_com_num( fft_numbatches+1, 4 ) )
+    
+    c2_com_num = 0
    
-       IF( allocated( parai%c2_recv_handle ) ) DEALLOCATE( parai%c2_recv_handle )
-       ALLOCATE( parai%c2_recv_handle( MAXVAL( fft_info( 2, : ) )*2*parai%cp_nogrp , MAXVAL( fft_info( 1, : ) )+1 ) )
+    IF( allocated( parai%c2_recv_handle ) ) DEALLOCATE( parai%c2_recv_handle )
+    ALLOCATE( parai%c2_recv_handle( MAXVAL( fft_info( 2, : ) )*2*parai%cp_nogrp , MAXVAL( fft_info( 1, : ) )+1 ) )
    
-       counter = 0
-       kter = 0
-       kter_save = 0
-       DO i = 1, parai%cp_nogrp
-          IF( i .eq. parai%cp_inter_me+1 ) CYCLE
-          jter = 0
-          DO j = 1, fft_numbatches+1
-             bsize = fft_batchsize*2
-             kter = kter_save(j)
-             IF( j .eq. fft_numbatches+1 ) bsize = fft_residual*2
-             IF( bsize .eq. 0 ) CYCLE
-             IF( ( fft_residual .eq. 0 .and. j .eq. fft_numbatches ) .or. &
-                 ( j .eq. fft_numbatches+1 ) ) bsize = bsize - remove
-             DO k = 1, bsize
-                kter = kter + 1
-                jter = jter + 1
-                counter = counter + 1
-                CALL mp_send_init_complex( c2(:,my_start+jter), start( parai%me+1, i )-1, ngw( parai%me+1, i ), com_matrix( parai%me+1, i ), parai%cp_me, parai%cp_grp, parai%c2_send_handle( kter, j ) )
-                parai%c2_send_handle_counter( counter ) = parai%c2_send_handle( kter, j )
-             ENDDO
-             kter_save(j) = kter
+    counter = 0
+    kter = 0
+    kter_save = 0
+    DO i = 1, parai%cp_nogrp
+       IF( i .eq. parai%cp_inter_me+1 ) CYCLE
+       jter = 0
+       DO j = 1, fft_numbatches+1
+          bsize = fft_batchsize*2
+          kter = kter_save(j)
+          IF( j .eq. fft_numbatches+1 ) bsize = fft_residual*2
+          IF( bsize .eq. 0 ) CYCLE
+          IF( ( fft_residual .eq. 0 .and. j .eq. fft_numbatches ) .or. &
+              ( j .eq. fft_numbatches+1 ) ) bsize = bsize - remove
+          DO k = 1, bsize
+             kter = kter + 1
+             jter = jter + 1
+             counter = counter + 1
+             CALL mp_send_init_complex( c2(:,my_start+jter), start( parai%me+1, i )-1, ngw( parai%me+1, i ), com_matrix( parai%me+1, i ), parai%cp_me, parai%cp_grp, parai%c2_send_handle( kter, j ) )
+             parai%c2_send_handle_counter( counter ) = parai%c2_send_handle( kter, j )
           ENDDO
+          kter_save(j) = kter
        ENDDO
-       c2_com_num(1,2) = counter
-       c2_com_num(:,1) = fft_batchsize*2
-       IF( fft_residual .ne. 0 ) THEN
-          c2_com_num(fft_numbatches+1,1) = fft_residual*2 - remove
+    ENDDO
+    c2_com_num(1,2) = counter
+    c2_com_num(:,1) = fft_batchsize*2
+    IF( fft_residual .ne. 0 ) THEN
+       c2_com_num(fft_numbatches+1,1) = fft_residual*2 - remove
+    ELSE
+       c2_com_num(fft_numbatches,1) = c2_com_num(fft_numbatches,1) - remove
+    END IF
+    c2_com_num(:,1) = c2_com_num(:,1) * (parai%cp_nogrp-1)
+   
+    counter = 0
+    current = 1
+    next = 0
+    which_batch = 1
+    DO i = 1, nstate
+       IF( i .gt. nstate_end(current) ) THEN
+          current = current + 1
+          next = 1
        ELSE
-          c2_com_num(fft_numbatches,1) = c2_com_num(fft_numbatches,1) - remove
+          next = next + 1
        END IF
-       c2_com_num(:,1) = c2_com_num(:,1) * (parai%cp_nogrp-1)
-   
-       counter = 0
-       current = 1
-       next = 0
-       which_batch = 1
-       DO i = 1, nstate
-          IF( i .gt. nstate_end(current) ) THEN
-             current = current + 1
-             next = 1
-          ELSE
-             next = next + 1
-          END IF
-          IF( current .eq. parai%cp_inter_me+1 ) CYCLE
-          counter = counter + 1
+       IF( current .eq. parai%cp_inter_me+1 ) CYCLE
+       counter = counter + 1
+       c2_com_num( which_batch( current ), 3 ) = c2_com_num( which_batch( current ), 3 ) + 1
+       IF( next .gt. fft_info( 2, current )*2 ) THEN
+          next = 1
+          c2_com_num( which_batch( current ), 3 ) = c2_com_num( which_batch( current ), 3 ) - 1
+          which_batch( current ) = which_batch( current ) + 1
           c2_com_num( which_batch( current ), 3 ) = c2_com_num( which_batch( current ), 3 ) + 1
-          IF( next .gt. fft_info( 2, current )*2 ) THEN
-             next = 1
-             c2_com_num( which_batch( current ), 3 ) = c2_com_num( which_batch( current ), 3 ) - 1
-             which_batch( current ) = which_batch( current ) + 1
-             c2_com_num( which_batch( current ), 3 ) = c2_com_num( which_batch( current ), 3 ) + 1
-          END IF
+       END IF
    
    
-          CALL mp_recv_init_complex( c2(:,i), start( parai%me+1, parai%cp_inter_me+1 )-1, ngw( parai%me+1, parai%cp_inter_me+1 ), &
-                                     com_matrix( parai%me+1, current ), parai%cp_grp, parai%c2_recv_handle_counter( counter ) )
-          parai%c2_recv_handle( c2_com_num( which_batch( current ), 3 ), which_batch( current ) ) = parai%c2_recv_handle_counter( counter )
+       CALL mp_recv_init_complex( c2(:,i), start( parai%me+1, parai%cp_inter_me+1 )-1, ngw( parai%me+1, parai%cp_inter_me+1 ), &
+                                  com_matrix( parai%me+1, current ), parai%cp_grp, parai%c2_recv_handle_counter( counter ) )
+       parai%c2_recv_handle( c2_com_num( which_batch( current ), 3 ), which_batch( current ) ) = parai%c2_recv_handle_counter( counter )
    
+    ENDDO
+    c2_com_num(2,2) = counter
+
+    IF( allocated( parai%c2_comb_handle ) ) DEALLOCATE( parai%c2_comb_handle )
+    ALLOCATE( parai%c2_comb_handle( c2_com_num(1,1)+c2_com_num(1,3) , fft_numbatches+1  ) )
+    
+    DO i = 1, fft_numbatches+1
+       c2_com_num(i,4) = c2_com_num(i,1) + c2_com_num(i,3)
+       DO j = 1, c2_com_num(i,1)
+          parai%c2_comb_handle( j, i ) = parai%c2_send_handle( j, i )
        ENDDO
-       c2_com_num(2,2) = counter
-
-       IF( allocated( parai%c2_comb_handle ) ) DEALLOCATE( parai%c2_comb_handle )
-       ALLOCATE( parai%c2_comb_handle( c2_com_num(1,1)+c2_com_num(1,3) , fft_numbatches+1  ) )
-       
-       DO i = 1, fft_numbatches+1
-          c2_com_num(i,4) = c2_com_num(i,1) + c2_com_num(i,3)
-          DO j = 1, c2_com_num(i,1)
-             parai%c2_comb_handle( j, i ) = parai%c2_send_handle( j, i )
-          ENDDO
-          DO j = 1, c2_com_num(i,3)
-             parai%c2_comb_handle( j + c2_com_num(i,1), i ) = parai%c2_recv_handle( j, i )
-          ENDDO
+       DO j = 1, c2_com_num(i,3)
+          parai%c2_comb_handle( j + c2_com_num(i,1), i ) = parai%c2_recv_handle( j, i )
        ENDDO
+    ENDDO
 
-       IF( allocated( parai%c2_comb_handle_counter ) ) DEALLOCATE( parai%c2_comb_handle_counter )
-       ALLOCATE( parai%c2_comb_handle_counter( nstate * 2 ) )
-       
-       c2_com_num(3,2) = c2_com_num(1,2) + c2_com_num(2,2)
-       DO j = 1, c2_com_num(1,2)
-          parai%c2_comb_handle_counter( j ) = parai%c2_send_handle_counter( j )
-       ENDDO
-       DO j = 1, c2_com_num(2,2)
-          parai%c2_comb_handle_counter( j + c2_com_num(1,2) ) = parai%c2_recv_handle_counter( j )
-       ENDDO
-
-    END IF
-
-    IF( cnti%C2_strat .eq. 3 .or. cnti%C2_strat .eq. 4 ) THEN
-
-       cp_nstates(1) = nstate_end(1)
-       DO i = 2, parai%cp_nogrp
-          cp_nstates(i) = nstate_end(i) - nstate_end(i-1)
-       ENDDO
-
-    END IF
-
-    IF( cnti%C2_strat .eq. 4 ) THEN
-
-       IF( allocated( parai%c2_comb_handle ) ) DEALLOCATE( parai%c2_comb_handle )
-       ALLOCATE( parai%c2_comb_handle( (parai%cp_nogrp-1)*2 , ( fft_numbatches / 3 ) + 1  ) )
-       IF( allocated( s4_coms ) ) DEALLOCATE( s4_coms )
-       ALLOCATE( s4_coms( ( fft_numbatches / 3 ) + 1 ) )
-
-       IF( allocated(baseoffset) ) DEALLOCATE( baseoffset )
-       ALLOCATE( baseoffset( parai%cp_nogrp ) )
-       baseoffset(1) = 0
-       DO icp = 2, parai%cp_nogrp
-          baseoffset(icp) = nstate_end( icp-1 )
-       ENDDO
-
-       IF( allocated(state_per_Com) ) DEALLOCATE( state_per_Com )
-       ALLOCATE( state_per_Com( ( fft_numbatches / 3 ) + 1, parai%cp_nogrp ) )
-       IF( allocated(offset_per_Com) ) DEALLOCATE( offset_per_Com )
-       ALLOCATE( offset_per_Com( ( fft_numbatches / 3 ) + 1, parai%cp_nogrp ) )
-       state_per_Com = 0
-       offset_per_Com = 0
-       offset_per_Com(1,parai%cp_inter_me+1) = 0
-       DO inb = 1, ( fft_numbatches / 3 )
-          state_per_Com(inb,parai%cp_inter_me+1) = fft_batchsize * 3 * 2
-          offset_per_Com(inb+1,parai%cp_inter_me+1) = offset_per_Com(inb,parai%cp_inter_me+1) + fft_batchsize * 3 * 2
-       ENDDO
-       state_per_Com(inb,parai%cp_inter_me+1) = nstate_local - SUM(state_per_Com(1:inb-1,parai%cp_inter_me+1))
-
-       CALL MP_SUM( state_per_Com , (( fft_numbatches / 3 ) + 1)*parai%cp_nogrp, parai%cp_inter_grp )
-       CALL MP_SUM( offset_per_Com, (( fft_numbatches / 3 ) + 1)*parai%cp_nogrp, parai%cp_inter_grp )
-
-       s4_coms = 0
-       DO inb = 1, ( fft_numbatches / 3 ) + 1
-          DO icp = 1, parai%cp_nogrp
-             IF( icp .eq. parai%cp_inter_me+1 ) CYCLE
-
-             s4_coms(inb) = s4_coms(inb) + 1
-             CALL mp_send_init_complex( c2(:,1+offset_per_Com(inb,parai%cp_inter_me+1)+baseoffset(parai%cp_inter_me+1)), 0, &
-                                        my_ngw * state_per_Com(inb,parai%cp_inter_me+1), &
-                                        icp-1, parai%cp_inter_me, parai%cp_inter_grp, parai%c2_comb_handle( s4_coms(inb), inb ) ) 
-          ENDDO
-       ENDDO
-
-
-       DO inb = 1, ( fft_numbatches / 3 ) + 1
-          DO icp = 1, parai%cp_nogrp
-             IF( icp .eq. parai%cp_inter_me+1 ) CYCLE
-
-             s4_coms(inb) = s4_coms(inb) + 1
-             CALL mp_recv_init_complex( c2(:,1+offset_per_Com(inb,icp)+baseoffset(icp)), 0, my_ngw * state_per_Com(inb,icp), &
-                                        icp-1, parai%cp_inter_grp, parai%c2_comb_handle( s4_coms(inb), inb ) )
-             
-          ENDDO
-       ENDDO
-
-    END IF
+    IF( allocated( parai%c2_comb_handle_counter ) ) DEALLOCATE( parai%c2_comb_handle_counter )
+    ALLOCATE( parai%c2_comb_handle_counter( nstate * 2 ) )
+    
+    c2_com_num(3,2) = c2_com_num(1,2) + c2_com_num(2,2)
+    DO j = 1, c2_com_num(1,2)
+       parai%c2_comb_handle_counter( j ) = parai%c2_send_handle_counter( j )
+    ENDDO
+    DO j = 1, c2_com_num(2,2)
+       parai%c2_comb_handle_counter( j + c2_com_num(1,2) ) = parai%c2_recv_handle_counter( j )
+    ENDDO
 
   END SUBROUTINE Pre_Initialize_C2_Com
 

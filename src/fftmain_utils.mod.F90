@@ -43,8 +43,6 @@ MODULE fftmain_utils
                                              locks_com_inv,&
                                              locks_com_fw,&
                                              locks_cc_invfw,&
-                                             locks_sing_1,&
-                                             locks_sing_2,&
                                              locks_omp,&
                                              locks_calc_1,&
                                              locks_calc_2,&

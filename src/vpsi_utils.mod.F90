@@ -75,8 +75,6 @@ MODULE vpsi_utils
                                              locks_com_inv,&
                                              locks_com_fw,&
                                              locks_cc_invfw,&
-                                             locks_sing_1,&
-                                             locks_sing_2,&
                                              locks_omp,&
                                              locks_calc_1,&
                                              locks_calc_2,&
@@ -2146,7 +2144,6 @@ CONTAINS
     tfft%which_wave = 2
 
     locks_cc_invfw = .true.
-
     locks_omp   = .true.
     IF( cntl%overlapp_comm_comp .and. tfft%do_comm(1) ) locks_omp( 1, :, : ) = .false.
     locks_omp_big  = .true.
@@ -2168,14 +2165,6 @@ CONTAINS
        IF(ierr/=0) CALL stopgm(procedureN,'cannot allocate rs_array', &
             __LINE__,__FILE__)
     END IF
-    IF( parai%cp_nogrp .ne. 1 .and. cnti%C2_strat .eq. 3 ) THEN
-       CALL request_scratch(il_c2_com_a2a,c2_com_send,procedureN//'c2_com_send',ierr)
-       IF(ierr/=0) CALL stopgm(procedureN,'cannot allocate c2_com_send', &
-            __LINE__,__FILE__)
-       CALL request_scratch(il_c2_com_a2a,c2_com_recv,procedureN//'c2_com_recv',ierr)
-       IF(ierr/=0) CALL stopgm(procedureN,'cannot allocate c2_com_recv', &
-            __LINE__,__FILE__)
-    END IF
 #else
     ALLOCATE(aux_array(il_aux_array(1),il_aux_array(2)),STAT=ierr)
     IF(ierr/=0) CALL stopgm(procedureN,'cannot allocate aux_array', &
@@ -2183,14 +2172,6 @@ CONTAINS
     IF( .not. cntl%krwfn ) THEN
        ALLOCATE(rs_array(il_rs_array(1),il_rs_array(2)),STAT=ierr)
        IF(ierr/=0) CALL stopgm(procedureN,'cannot allocate rs_array', &
-            __LINE__,__FILE__)
-    END IF
-    IF( parai%cp_nogrp .ne. 1 .and. cnti%C2_strat .eq. 3 ) THEN
-       IF( .not. allocated( c2_com_send ) ) ALLOCATE( c2_com_send( il_c2_com_a2a(1), il_c2_com_a2a(2) ) )
-       IF(ierr/=0) CALL stopgm(procedureN,'cannot allocate c2_com_send', &
-            __LINE__,__FILE__)
-       IF( .not. allocated( c2_com_recv ) ) ALLOCATE( c2_com_recv( il_c2_com_a2a(1), il_c2_com_a2a(2) ) )
-       IF(ierr/=0) CALL stopgm(procedureN,'cannot allocate c2_com_recv', &
             __LINE__,__FILE__)
     END IF
 #endif
@@ -2263,15 +2244,6 @@ CONTAINS
                    CALL fft_new_gdist_batch( tfft, -1, 2, bsize, 1, remswitch, mythread, counter(2), swap, f_inout1=comm_send, f_inout2=comm_recv )
                 END IF
              END IF
-          END IF
-          IF( parai%nnode .eq. 1 ) THEN
-             counter(2) = counter(2) + 1
-             !$OMP Barrier
-             IF( mythread .eq. 0 ) locks_sing_1( parai%node_me+1, counter(2) ) = .false.
-             !$omp flush( locks_sing_1 )
-             !$  DO WHILE( ANY(locks_sing_1( :, counter(2) ) ) )
-             !$omp flush( locks_sing_1 )
-             !$  END DO
           END IF
        END IF
 
@@ -2427,15 +2399,9 @@ CONTAINS
                 swap2=mod(ibatch-start_loop2,il_aux_array(2))+1
                 counter(6) = counter(6) + 1
                 CALL fft_new_gdist_batch( tfft, 1, 4, bsize, 1, remswitch, mythread, counter(6), swap, f_inout1=comm_recv, f_inout2=aux_array(:,swap2:swap2) )
-                IF( redist_c2 .and. cnti%C2_strat .eq. 3 ) THEN
-                   CALL calc_c2_new_gdist_strat3( aux_array(:,swap2), c2(:, i_start3+1+(counter(6)-1)*fft_batchsize*2 : i_start3+bsize*2+(counter(6)-1)*fft_batchsize*2), &
-                                          c2_com_send(:,((counter(6)-1)/3)+1), c0(:, i_start3+1+(counter(6)-1)*fft_batchsize*2 : i_start3+bsize*2+(counter(6)-1)*fft_batchsize*2 ), &
-                                          f, mythread, bsize, counter(6), njump, nostat, last_single, tfft%ngw )
-                ELSE
-                   CALL calc_c2_new_gdist( aux_array(:,swap2), c2(:, i_start3+1+(counter(6)-1)*fft_batchsize*2 : i_start3+bsize*2+(counter(6)-1)*fft_batchsize*2), &
-                                          c0(:, i_start3+1+(counter(6)-1)*fft_batchsize*2 : i_start3+bsize*2+(counter(6)-1)*fft_batchsize*2 ), &
-                                          f, mythread, bsize, counter(6), njump, nostat, last_single )
-                END IF
+                CALL calc_c2_new_gdist( aux_array(:,swap2), c2(:, i_start3+1+(counter(6)-1)*fft_batchsize*2 : i_start3+bsize*2+(counter(6)-1)*fft_batchsize*2), &
+                                       c0(:, i_start3+1+(counter(6)-1)*fft_batchsize*2 : i_start3+bsize*2+(counter(6)-1)*fft_batchsize*2 ), &
+                                       f, mythread, bsize, counter(6), njump, nostat, last_single )
              END IF
           END IF
        END IF
@@ -2456,8 +2422,7 @@ CONTAINS
                 END IF
                 IF(bsize.NE.0)THEN
                    IF (redist_c2) THEN
-                      IF( cnti%C2_strat .eq. 2 .or. ( ( cnti%C2_strat .eq. 3 .or. cnti%C2_strat .eq. 4 ) .and. ( (mod(counter(7)-1,3)+1) .eq. 3 &
-                          .or. ibatch-start_loop3 .gt. fft_numbatches .or. (ibatch-start_loop3 .eq. fft_numbatches .and. fft_residual .eq. 0 ) ) ) ) THEN
+                      IF( cnti%C2_strat .eq. 2 ) THEN
                         
                          !$omp flush( locks_omp )
                          !$  DO WHILE( ANY( locks_omp( :, counter(7), 6 ) ) )
@@ -2465,23 +2430,9 @@ CONTAINS
                          !$  END DO
    
                          CALL tiset(procedureN//'_grps_b',isub3)
+  
+                         CALL Communicate_c2_Strat2( c2, tfft%c2_com_num, counter, ibatch, end_loop3, start_loop3 )
 
-                         IF( cnti%C2_strat .eq. 2 ) THEN
-   
-                            CALL Communicate_c2_Strat2( c2, tfft%c2_com_num, counter, ibatch, end_loop3, start_loop3 )
-
-                         ELSE IF( cnti%C2_strat .eq. 3 ) THEN
-
-                            CALL MP_ALL2ALL( c2_com_send(:,((counter(7)-1)/3)+1), c2_com_recv(:,((counter(7)-1)/3)+1), &
-                                             tfft%ngw*2*fft_batchsize*3, parai%cp_inter_grp )
-
-                         ELSE IF( cnti%C2_strat .eq. 4 ) THEN
-
-                            CALL MP_STARTALL( tfft%s4_coms( ((counter(7)-1)/3)+1 ), parai%c2_comb_handle(1:tfft%s4_coms( ((counter(7)-1)/3)+1 ), ((counter(7)-1)/3)+1 ) )
-                            CALL MP_WAITALL( tfft%s4_coms( ((counter(7)-1)/3)+1 ), parai%c2_comb_handle(1:tfft%s4_coms( ((counter(7)-1)/3)+1 ), ((counter(7)-1)/3)+1 ) )
-
-                         END IF
-   
                          CALL tihalt(procedureN//'_grps_b',isub3)
 
                       END IF
@@ -2592,11 +2543,6 @@ CONTAINS
        CALL cp_grp_redist_array(C2,nkpt%ngwk,nstate)
        CALL tihalt(procedureN//'_grps_b',isub3)
     ENDIF
-    IF( redist_c2 .and. cnti%C2_strat .eq. 3 ) THEN
-       CALL tiset(procedureN//'_grps_c',isub3)
-       CALL Unpack_C2( c2_com_recv, c2, tfft%ngw, nstate_local, nstate, tfft%cp_nstates )
-       CALL tihalt(procedureN//'_grps_c',isub3)
-    END IF
 
     IF (tkpts%tkpnt) CALL c_clean(c2,nstate,ikind)
     ! SPECIAL TERMS FOR LSE METHODS
@@ -2635,52 +2581,4 @@ CONTAINS
 
   END SUBROUTINE Communicate_c2_strat2
 
-  SUBROUTINE Unpack_C2( c2_com_recv_r, c2, ngw, nstate_local, nstate, cp_nstates )
-    IMPLICIT NONE
-
-    INTEGER, INTENT(IN) :: ngw, nstate_local, nstate
-    INTEGER, INTENT(IN) :: cp_nstates(:)
-    COMPLEX(real_8), INTENT(INOUT) :: c2( : , : )
-    COMPLEX(real_8), INTENT(IN) :: c2_com_recv_r( : , : )
-  
-    CALL unpacking( c2_com_recv_r )
- 
-    CONTAINS
-
-      SUBROUTINE unpacking( c2_com_recv )
-        IMPLICIT NONE
-
-        COMPLEX(real_8), INTENT(IN) :: c2_com_recv( ngw * 2, fft_batchsize * 3, parai%cp_nogrp, ( fft_numbatches / 3 ) + 1 )
-        INTEGER :: istate, istate_cp, icp, inb, isize, ibatch, igamma, ingw
-
-        !$OMP parallel private( istate, istate_cp )
-        istate = 0 
-        outer: DO icp = 1, parai%cp_nogrp
-           istate_cp = 0
-           DO inb = 1, ( fft_numbatches / 3 ) + 1
-              IF( icp .eq. parai%cp_inter_me + 1 ) THEN
-                 istate = istate + nstate_local
-                 CYCLE outer
-              END IF
-              DO isize = 1, 3
-                 DO ibatch = 1, fft_batchsize
-                    DO igamma = 1, 2
-                       istate_cp = istate_cp + 1
-                       IF( istate_cp .gt. cp_nstates(icp) ) CYCLE outer
-                       istate = istate + 1
-                       !$OMP do simd
-                       DO ingw = 1, ngw
-                          c2( ingw , istate ) = c2_com_recv( ingw + ngw*(igamma-1), ibatch + fft_batchsize*(isize-1), icp, inb )
-                       ENDDO
-                       !$OMP end do simd nowait
-                    ENDDO
-                 ENDDO
-              ENDDO
-           ENDDO
-        ENDDO outer
-        !$OMP end parallel
-
-     END SUBROUTINE unpacking
-  
-  END SUBROUTINE Unpack_C2
 END MODULE vpsi_utils

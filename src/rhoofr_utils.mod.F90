@@ -77,7 +77,6 @@ MODULE rhoofr_utils
                                              locks_com_fw,&
                                              locks_cc_invfw,&
                                              locks_omp,&
-                                             locks_sing_1,&
                                              locks_calc_1,&
                                              locks_omp_big
   USE fftutil_utils,                   ONLY: set_psi_new_gdist
@@ -1439,7 +1438,6 @@ CONTAINS
     tfft%which_wave = 1
 
     locks_cc_invfw = .true.
-
     locks_omp   = .true.
     IF( cntl%overlapp_comm_comp .and. tfft%do_comm(1) ) locks_omp( 1, :, : ) = .false.
     locks_omp_big   = .true.
