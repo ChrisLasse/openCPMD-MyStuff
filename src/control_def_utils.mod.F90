@@ -702,6 +702,8 @@ CONTAINS
     cntl%use_elpa_autotune=.FALSE.
     !CLR which C2 communication scheme to use
     cnti%C2_strat=1
+    !CLR prescribe the batchsize to a defined value; supposed to turn off autotunning
+    cntl%fft_prescribe_batchsize = .FALSE.
     !CLR OLD(TRUE) : Consecutive tasks are part of alternating CP-groups
     !    NEW(FALSE): Consecutive tasks are part of consecutive CP-groups
     cntl%old_cp_ordering=.FALSE.

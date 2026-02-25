@@ -719,7 +719,7 @@ CONTAINS
        IF( allocated( locks_omp_big ) ) DEALLOCATE( locks_omp_big )
        ALLOCATE( locks_omp_big( parai%ncpus_FFT, fft_batchsize, fft_numbatches+3, 20 ) )
 
-       CALL Make_Manual_Maps( tfft, fft_batchsize, fft_residual, tfft%nsw, tfft%nr1w, tfft%ngw, tfft%which, nstate )
+       CALL Make_Manual_Maps( tfft, fft_batchsize, fft_residual, tfft%nsw, tfft%nr1w, tfft%ngw, tfft%sparse, nstate )
 
        first = .true.
 
@@ -762,7 +762,7 @@ CONTAINS
        comm_send => Big_Pointer(:,:,1)
        comm_recv => Big_Pointer(:,:,2)
 
-       CALL Make_Manual_Maps( tfft, 1, 0, nss, nr1s, ngs, tfft%which, 0 )
+       CALL Make_Manual_Maps( tfft, 1, 0, nss, nr1s, ngs, tfft%sparse, 0 )
 
        IF( .not. allocated( locks_omp ) ) ALLOCATE( locks_omp( parai%ncpus_FFT, 1, 20 ) )
        !$ locks_omp = .true.
@@ -773,7 +773,7 @@ CONTAINS
 
        first = .false.
 
-       CALL Make_Manual_Maps( tfft, 1, 0, nss, nr1s, ngs, tfft%which, 0 )
+       CALL Make_Manual_Maps( tfft, 1, 0, nss, nr1s, ngs, tfft%sparse, 0 )
 
     END IF
 
@@ -983,7 +983,7 @@ CONTAINS
        tfft%thread_x_end( i, which ) = tfft%thread_x_start( i, which ) + tfft%thread_x_sticks( i, which ) - 1
     ENDDO
 
-    IF( tfft%which .eq. 1 ) THEN
+    IF( tfft%sparse .eq. 1 ) THEN
 
      ! gspace things
 

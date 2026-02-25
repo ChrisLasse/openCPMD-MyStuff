@@ -812,7 +812,7 @@ CONTAINS
           !$omp   flush( locks_cc_invfw )
           !$   END DO
 
-          IF( tfft%which_wave .eq. 2 ) THEN
+          IF( tfft%which_sparse .eq. 2 ) THEN
 
              !$  locks_omp_big( mythread+1, ispec, counter, 1 ) = .false.
              !$omp flush( locks_omp_big )
@@ -836,7 +836,7 @@ CONTAINS
 
           CALL invfft_x_section( tfft, f_inout1(:,1), f_inout2(:,1), mythread, tfft%nr1w )
 
-          IF( tfft%which_wave .eq. 1 ) THEN
+          IF( tfft%which_sparse .eq. 1 ) THEN
 
              !$  locks_omp_big( mythread+1, ispec, counter, 3 ) = .false.
              !$omp flush( locks_omp_big )
@@ -937,7 +937,7 @@ CONTAINS
          __LINE__,__FILE__)
 #endif
 
-    tfft%which = 2
+    tfft%sparse = 2
     sendsize = MAXVAL ( tfft%nr3p ) * MAXVAL( nss )
 
     CALL fft_new_gdist_setup( tfft, nss, nr1s, ngs )
@@ -1002,7 +1002,7 @@ CONTAINS
          __LINE__,__FILE__)
 #endif
 
-    tfft%which = 1
+    tfft%sparse = 1
 
 !    CALL tihalt(procedureN,isub)
 

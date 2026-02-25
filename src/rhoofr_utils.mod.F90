@@ -1435,7 +1435,7 @@ CONTAINS
     IF( fft_numbuff .eq. 3 ) THEN
        fft_numbuff = 2
     END IF
-    tfft%which_wave = 1
+    tfft%which_sparse = 1
 
     locks_cc_invfw = .true.
     locks_omp   = .true.

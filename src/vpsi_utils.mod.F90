@@ -2141,7 +2141,7 @@ CONTAINS
                                    fft_numbatches, tfft%cp_nstates, tfft%s4_coms, tfft%ngw )
     END IF
 
-    tfft%which_wave = 2
+    tfft%which_sparse = 2
 
     locks_cc_invfw = .true.
     locks_omp   = .true.

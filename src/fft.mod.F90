@@ -152,8 +152,8 @@ MODULE fft
      INTEGER :: max_ngw
      INTEGER :: max_nstates
 
-     INTEGER :: which ! 1 -> wave sticks ; 2 -> pot sticks
-     INTEGER :: which_wave ! 1 -> rho ; -> 2 -> vpsi
+     INTEGER :: sparse ! 1 -> wave sticks ; 2 -> pot sticks
+     INTEGER :: which_sparse ! 1 -> rho ; -> 2 -> vpsi
      LOGICAL :: no_comm
 
      DOUBLE PRECISION :: tscale

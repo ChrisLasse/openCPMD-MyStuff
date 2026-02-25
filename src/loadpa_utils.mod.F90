@@ -1293,7 +1293,7 @@ CONTAINS
 
     INTEGER                                     :: ierr, i, istick, i1, i2, ix, iy, ixM, i1M, i2M, k, f, j, ifa, jfa
 
-    tfft%which = 1
+    tfft%sparse = 1
 
     ALLOCATE(tfft%nr3p(parai%nproc),STAT=ierr)
     IF(ierr/=0) CALL stopgm(procedureN,'allocation problem',&

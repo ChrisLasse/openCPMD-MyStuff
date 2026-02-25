@@ -980,7 +980,7 @@ CONTAINS
 
     IF( .not. last_single ) THEN
 
-       DO i = tfft%thread_z_start( mythread+1, remswitch, parai%me+1, tfft%which ), tfft%thread_z_end( mythread+1, remswitch, parai%me+1, tfft%which )
+       DO i = tfft%thread_z_start( mythread+1, remswitch, parai%me+1, tfft%sparse ), tfft%thread_z_end( mythread+1, remswitch, parai%me+1, tfft%sparse )
           iter = mod( i-1, tfft%nsw(parai%me+1) ) + 1
           offset  = ( iter - 1 ) * fpar%kr3s
           offset2 = 2 * ( ( (i-1) / tfft%nsw(parai%me+1) ) + 1 )
@@ -1130,11 +1130,11 @@ CONTAINS
   !------------------------------------------------------
   !------------z-FFT Start-------------------------------
 
-    CALL mltfft_fftw_threadsafe('n','n',aux( : , tfft%thread_z_start( mythread+1, remswitch, parai%me+1, tfft%which ) : tfft%thread_z_end( mythread+1, remswitch, parai%me+1, tfft%which ) ), &
-                     fpar%kr3s, tfft%thread_z_sticks(mythread+1,remswitch,parai%me+1,tfft%which), &
-                     aux( : , tfft%thread_z_start( mythread+1, remswitch, parai%me+1, tfft%which ) : tfft%thread_z_end( mythread+1, remswitch, parai%me+1, tfft%which ) ), &
-                     fpar%kr3s, tfft%thread_z_sticks(mythread+1,remswitch,parai%me+1,tfft%which), &
-                     fpar%kr3s, tfft%thread_z_sticks(mythread+1,remswitch,parai%me+1,tfft%which),-1,scal,.FALSE.,mythread,parai%ncpus_FFT)
+    CALL mltfft_fftw_threadsafe('n','n',aux( : , tfft%thread_z_start( mythread+1, remswitch, parai%me+1, tfft%sparse ) : tfft%thread_z_end( mythread+1, remswitch, parai%me+1, tfft%sparse ) ), &
+                     fpar%kr3s, tfft%thread_z_sticks(mythread+1,remswitch,parai%me+1,tfft%sparse), &
+                     aux( : , tfft%thread_z_start( mythread+1, remswitch, parai%me+1, tfft%sparse ) : tfft%thread_z_end( mythread+1, remswitch, parai%me+1, tfft%sparse ) ), &
+                     fpar%kr3s, tfft%thread_z_sticks(mythread+1,remswitch,parai%me+1,tfft%sparse), &
+                     fpar%kr3s, tfft%thread_z_sticks(mythread+1,remswitch,parai%me+1,tfft%sparse),-1,scal,.FALSE.,mythread,parai%ncpus_FFT)
 
   !-------------z-FFT End--------------------------------
   !------------------------------------------------------
@@ -1149,9 +1149,9 @@ CONTAINS
           DO m = 1, parai%node_nproc_overview( l )
              j = j + 1
              !     ( Where am I on the node + to which proc does it go ) * Package size
-             offset = (j-1) * tfft%small_chunks(tfft%which) * batch_size
-             DO k = tfft%thread_z_start( mythread+1, remswitch, parai%me+1, tfft%which ), tfft%thread_z_end( mythread+1, remswitch, parai%me+1, tfft%which )
-                kdest = offset + tfft%nr3px * mod( (k-1), nss(parai%me+1) ) + ( (k-1) / nss(parai%me+1) ) * tfft%small_chunks(tfft%which)
+             offset = (j-1) * tfft%small_chunks(tfft%sparse) * batch_size
+             DO k = tfft%thread_z_start( mythread+1, remswitch, parai%me+1, tfft%sparse ), tfft%thread_z_end( mythread+1, remswitch, parai%me+1, tfft%sparse )
+                kdest = offset + tfft%nr3px * mod( (k-1), nss(parai%me+1) ) + ( (k-1) / nss(parai%me+1) ) * tfft%small_chunks(tfft%sparse)
                 DO i = 1, tfft%nr3p( j )
                    comm_mem_send( kdest + i ) = aux( i + tfft%nr3p_offset( j ), k )
                 ENDDO
@@ -1166,9 +1166,9 @@ CONTAINS
        DO m = 1, parai%node_nproc_overview( l )
           j = j + 1
           !     ( Where am I on the node + to which proc does it go ) * Package size
-          offset = (j-1) * tfft%small_chunks(tfft%which) * batch_size
-          DO k = tfft%thread_z_start( mythread+1, remswitch, parai%me+1, tfft%which ), tfft%thread_z_end( mythread+1, remswitch, parai%me+1, tfft%which )
-             kdest = offset + tfft%nr3px * mod( (k-1), nss(parai%me+1) ) + ( (k-1) / nss(parai%me+1) ) * tfft%small_chunks(tfft%which)
+          offset = (j-1) * tfft%small_chunks(tfft%sparse) * batch_size
+          DO k = tfft%thread_z_start( mythread+1, remswitch, parai%me+1, tfft%sparse ), tfft%thread_z_end( mythread+1, remswitch, parai%me+1, tfft%sparse )
+             kdest = offset + tfft%nr3px * mod( (k-1), nss(parai%me+1) ) + ( (k-1) / nss(parai%me+1) ) * tfft%small_chunks(tfft%sparse)
              DO i = 1, tfft%nr3p( j )
                 comm_mem_recv( kdest + i ) = aux( i + tfft%nr3p_offset( j ), k )
              ENDDO
@@ -1196,20 +1196,20 @@ CONTAINS
   !------------------------------------------------------
   !----------unpack_z2y Start----------------------------
 
-    offset = (ispec-1)*tfft%big_chunks( tfft%which )
+    offset = (ispec-1)*tfft%big_chunks( tfft%sparse )
 
-    DO i = tfft%thread_y_start( mythread+1, tfft%which ), tfft%thread_y_end( mythread+1, tfft%which )
+    DO i = tfft%thread_y_start( mythread+1, tfft%sparse ), tfft%thread_y_end( mythread+1, tfft%sparse )
        iter = mod( i-1, my_nr1s ) + 1
-       DO k = tfft%map_z2y_bounds( iter, 1, tfft%which ), tfft%map_z2y_bounds( iter, 2, tfft%which ) - 1
+       DO k = tfft%map_z2y_bounds( iter, 1, tfft%sparse ), tfft%map_z2y_bounds( iter, 2, tfft%sparse ) - 1
           aux( k, i ) = (0.0_real_8,0.0_real_8)
        END DO
-       DO k = tfft%map_z2y_bounds( iter, 5, tfft%which ), tfft%map_z2y_bounds( iter, 6, tfft%which ) - 1
+       DO k = tfft%map_z2y_bounds( iter, 5, tfft%sparse ), tfft%map_z2y_bounds( iter, 6, tfft%sparse ) - 1
           aux( k, i ) = comm_mem_recv( map_z2y( (i-1) * fpar%kr2s + k ) + offset )
        END DO
-       DO k = tfft%map_z2y_bounds( iter, 3, tfft%which ), tfft%map_z2y_bounds( iter, 4, tfft%which ) - 1
+       DO k = tfft%map_z2y_bounds( iter, 3, tfft%sparse ), tfft%map_z2y_bounds( iter, 4, tfft%sparse ) - 1
           aux( k, i ) = (0.0_real_8,0.0_real_8)
        END DO
-       DO k = tfft%map_z2y_bounds( iter, 7, tfft%which ), tfft%map_z2y_bounds( iter, 8, tfft%which ) - 1
+       DO k = tfft%map_z2y_bounds( iter, 7, tfft%sparse ), tfft%map_z2y_bounds( iter, 8, tfft%sparse ) - 1
           aux( k, i ) = comm_mem_recv( map_z2y( (i-1) * fpar%kr2s + k ) + offset )
        END DO
     END DO
@@ -1217,7 +1217,7 @@ CONTAINS
   !-----------unpack_z2y End-----------------------------
   !------------------------------------------------------
 
-    IF( tfft%which .eq. 1 ) THEN
+    IF( tfft%sparse .eq. 1 ) THEN
        !$  locks_omp_big( mythread+1, ispec, counter, 5 ) = .false.
        !$omp flush( locks_omp_big )
     END IF
@@ -1225,11 +1225,11 @@ CONTAINS
   !------------------------------------------------------
   !------------y-FFT Start-------------------------------
 
-    CALL mltfft_fftw_threadsafe('n','n',aux( : , tfft%thread_y_start( mythread+1, tfft%which ) : tfft%thread_y_end( mythread+1, tfft%which ) ), &
-                     fpar%kr2s, tfft%thread_y_sticks(mythread+1,tfft%which), &
-                     aux( : , tfft%thread_y_start( mythread+1, tfft%which ) : tfft%thread_y_end( mythread+1, tfft%which ) ), &
-                     fpar%kr2s, tfft%thread_y_sticks(mythread+1,tfft%which), &
-                     fpar%kr2s, tfft%thread_y_sticks(mythread+1,tfft%which),-1,scal,.FALSE.,mythread,parai%ncpus_FFT)
+    CALL mltfft_fftw_threadsafe('n','n',aux( : , tfft%thread_y_start( mythread+1, tfft%sparse ) : tfft%thread_y_end( mythread+1, tfft%sparse ) ), &
+                     fpar%kr2s, tfft%thread_y_sticks(mythread+1,tfft%sparse), &
+                     aux( : , tfft%thread_y_start( mythread+1, tfft%sparse ) : tfft%thread_y_end( mythread+1, tfft%sparse ) ), &
+                     fpar%kr2s, tfft%thread_y_sticks(mythread+1,tfft%sparse), &
+                     fpar%kr2s, tfft%thread_y_sticks(mythread+1,tfft%sparse),-1,scal,.FALSE.,mythread,parai%ncpus_FFT)
 
   !-------------y-FFT End--------------------------------
   !------------------------------------------------------
@@ -1262,16 +1262,16 @@ CONTAINS
         !------------------------------------------------------
         !---------transpose y2x Start--------------------------
 
-          DO i = tfft%thread_x_start( mythread+1, tfft%which ), tfft%thread_x_end( mythread+1, tfft%which )
+          DO i = tfft%thread_x_start( mythread+1, tfft%sparse ), tfft%thread_x_end( mythread+1, tfft%sparse )
              offset = (i-1) * fpar%kr1s
-             DO k = 1, tfft%zero_transpose_y2x_start( tfft%which ) - 1
-                aux_r( offset + k ) = aux2( tfft%map_transpose_y2x( offset + k, tfft%which ) )
+             DO k = 1, tfft%zero_transpose_y2x_start( tfft%sparse ) - 1
+                aux_r( offset + k ) = aux2( tfft%map_transpose_y2x( offset + k, tfft%sparse ) )
              END DO
-             DO k = tfft%zero_transpose_y2x_start( tfft%which ), tfft%zero_transpose_y2x_end( tfft%which )
+             DO k = tfft%zero_transpose_y2x_start( tfft%sparse ), tfft%zero_transpose_y2x_end( tfft%sparse )
                 aux_r( offset + k ) = (0.0_real_8, 0.0_real_8)
              END DO
-             DO k = tfft%zero_transpose_y2x_end( tfft%which ) + 1, fpar%kr1s
-                aux_r( offset + k ) = aux2( tfft%map_transpose_y2x( offset + k, tfft%which ) )
+             DO k = tfft%zero_transpose_y2x_end( tfft%sparse ) + 1, fpar%kr1s
+                aux_r( offset + k ) = aux2( tfft%map_transpose_y2x( offset + k, tfft%sparse ) )
              END DO
           END DO
 
@@ -1288,11 +1288,11 @@ CONTAINS
         !------------------------------------------------------
         !------------x-FFT Start-------------------------------
 
-          CALL mltfft_fftw_threadsafe('n','n',aux_r( : , tfft%thread_x_start( mythread+1, tfft%which ) : tfft%thread_x_end( mythread+1, tfft%which ) ), &
-                           fpar%kr1s, tfft%thread_x_sticks(mythread+1, tfft%which), &
-                           aux_r( :, tfft%thread_x_start( mythread+1, tfft%which ) : tfft%thread_x_end( mythread+1, tfft%which ) ), &
-                           fpar%kr1s, tfft%thread_x_sticks(mythread+1, tfft%which), &
-                           fpar%kr1s, tfft%thread_x_sticks(mythread+1, tfft%which),-1,scal,.FALSE.,mythread,parai%ncpus_FFT)
+          CALL mltfft_fftw_threadsafe('n','n',aux_r( : , tfft%thread_x_start( mythread+1, tfft%sparse ) : tfft%thread_x_end( mythread+1, tfft%sparse ) ), &
+                           fpar%kr1s, tfft%thread_x_sticks(mythread+1, tfft%sparse), &
+                           aux_r( :, tfft%thread_x_start( mythread+1, tfft%sparse ) : tfft%thread_x_end( mythread+1, tfft%sparse ) ), &
+                           fpar%kr1s, tfft%thread_x_sticks(mythread+1, tfft%sparse), &
+                           fpar%kr1s, tfft%thread_x_sticks(mythread+1, tfft%sparse),-1,scal,.FALSE.,mythread,parai%ncpus_FFT)
 
         !-------------x-FFT End--------------------------------
         !------------------------------------------------------
@@ -1313,11 +1313,11 @@ CONTAINS
   !------------------------------------------------------
   !------------x-FFT Start-------------------------------
 
-    CALL mltfft_fftw_threadsafe('n','n',aux( : , tfft%thread_x_start( mythread+1, tfft%which ) : tfft%thread_x_end( mythread+1, tfft%which ) ), &
-                     fpar%kr1s, tfft%thread_x_sticks(mythread+1, tfft%which), &
-                     aux( : , tfft%thread_x_start( mythread+1,  tfft%which ) : tfft%thread_x_end( mythread+1, tfft%which ) ), &
-                     fpar%kr1s, tfft%thread_x_sticks(mythread+1, tfft%which), &
-                     fpar%kr1s, tfft%thread_x_sticks(mythread+1, tfft%which),1,scal,.FALSE.,mythread,parai%ncpus_FFT)
+    CALL mltfft_fftw_threadsafe('n','n',aux( : , tfft%thread_x_start( mythread+1, tfft%sparse ) : tfft%thread_x_end( mythread+1, tfft%sparse ) ), &
+                     fpar%kr1s, tfft%thread_x_sticks(mythread+1, tfft%sparse), &
+                     aux( : , tfft%thread_x_start( mythread+1,  tfft%sparse ) : tfft%thread_x_end( mythread+1, tfft%sparse ) ), &
+                     fpar%kr1s, tfft%thread_x_sticks(mythread+1, tfft%sparse), &
+                     fpar%kr1s, tfft%thread_x_sticks(mythread+1, tfft%sparse),1,scal,.FALSE.,mythread,parai%ncpus_FFT)
 
   !-------------x-FFT End--------------------------------
   !------------------------------------------------------
@@ -1359,9 +1359,9 @@ CONTAINS
         !------------------------------------------------------
         !---------transpose x2y Start--------------------------
 
-          DO i = tfft%thread_y_start( mythread+1, tfft%which ), tfft%thread_y_end( mythread+1, tfft%which )
+          DO i = tfft%thread_y_start( mythread+1, tfft%sparse ), tfft%thread_y_end( mythread+1, tfft%sparse )
              DO j = 1, fpar%kr2s
-                aux2( j + (i-1) * fpar%kr2s ) = aux( tfft%map_transpose_x2y( j + (i-1) * fpar%kr2s, tfft%which ) )
+                aux2( j + (i-1) * fpar%kr2s ) = aux( tfft%map_transpose_x2y( j + (i-1) * fpar%kr2s, tfft%sparse ) )
              ENDDO
           ENDDO
 
@@ -1377,11 +1377,11 @@ CONTAINS
         !------------------------------------------------------
         !------------y-FFT Start-------------------------------
 
-          CALL mltfft_fftw_threadsafe('n','n',aux2( : , tfft%thread_y_start( mythread+1, tfft%which ) : tfft%thread_y_end( mythread+1, tfft%which ) ), &
-                           fpar%kr2s, tfft%thread_y_sticks(mythread+1,tfft%which), &
-                           aux2( : , tfft%thread_y_start( mythread+1, tfft%which ) : tfft%thread_y_end( mythread+1, tfft%which ) ), &
-                           fpar%kr2s, tfft%thread_y_sticks(mythread+1,tfft%which), &
-                           fpar%kr2s, tfft%thread_y_sticks(mythread+1,tfft%which),1,scal,.FALSE.,mythread,parai%ncpus_FFT)
+          CALL mltfft_fftw_threadsafe('n','n',aux2( : , tfft%thread_y_start( mythread+1, tfft%sparse ) : tfft%thread_y_end( mythread+1, tfft%sparse ) ), &
+                           fpar%kr2s, tfft%thread_y_sticks(mythread+1,tfft%sparse), &
+                           aux2( : , tfft%thread_y_start( mythread+1, tfft%sparse ) : tfft%thread_y_end( mythread+1, tfft%sparse ) ), &
+                           fpar%kr2s, tfft%thread_y_sticks(mythread+1,tfft%sparse), &
+                           fpar%kr2s, tfft%thread_y_sticks(mythread+1,tfft%sparse),1,scal,.FALSE.,mythread,parai%ncpus_FFT)
 
         !-------------y-FFT End--------------------------------
         !------------------------------------------------------
@@ -1396,18 +1396,18 @@ CONTAINS
         !------------------------------------------------------
         !-----------pack_y2z Start-----------------------------
 
-          offset2 =  (ispec-1) * tfft%small_chunks(tfft%which)
+          offset2 =  (ispec-1) * tfft%small_chunks(tfft%sparse)
           IF( parai%cp_nproc .ne. 1 ) THEN
 
              i = 0
              DO l = 1, parai%nnode
                 DO m = 1, parai%node_nproc_overview( l )
                    i = i + 1
-                   offset = (i-1) * tfft%small_chunks(tfft%which) * batch_size
-                   DO j = tfft%thread_z_start( mythread+1, 3, i, tfft%which ), tfft%thread_z_end( mythread+1, 3, i, tfft%which )
+                   offset = (i-1) * tfft%small_chunks(tfft%sparse) * batch_size
+                   DO j = tfft%thread_z_start( mythread+1, 3, i, tfft%sparse ), tfft%thread_z_end( mythread+1, 3, i, tfft%sparse )
                       DO k = 1, tfft%my_nr3p
                          comm_mem_send( offset + offset2 + (j-1)*tfft%nr3px + k ) = &
-                         aux2( map_y2z( (i-1)*tfft%small_chunks(tfft%which) + (j-1)*tfft%nr3px + k ) )
+                         aux2( map_y2z( (i-1)*tfft%small_chunks(tfft%sparse) + (j-1)*tfft%nr3px + k ) )
                       END DO
                    END DO
                 END DO
@@ -1415,10 +1415,10 @@ CONTAINS
 
           END IF
 
-          DO j = tfft%thread_z_start( mythread+1, 3, parai%me+1, tfft%which ), tfft%thread_z_end( mythread+1, 3, parai%me+1, tfft%which )
+          DO j = tfft%thread_z_start( mythread+1, 3, parai%me+1, tfft%sparse ), tfft%thread_z_end( mythread+1, 3, parai%me+1, tfft%sparse )
              DO k = 1, tfft%my_nr3p
-                comm_mem_recv( parai%cp_me * tfft%small_chunks(tfft%which) * batch_size + offset2 + (j-1)*tfft%nr3px + k ) = &
-                aux2( map_y2z( parai%me*tfft%small_chunks(tfft%which) + (j-1)*tfft%nr3px + k ) )
+                comm_mem_recv( parai%cp_me * tfft%small_chunks(tfft%sparse) * batch_size + offset2 + (j-1)*tfft%nr3px + k ) = &
+                aux2( map_y2z( parai%me*tfft%small_chunks(tfft%sparse) + (j-1)*tfft%nr3px + k ) )
              END DO
           END DO
 
@@ -1457,9 +1457,9 @@ CONTAINS
     DO j = 1, parai%nnode
        DO l = 1, parai%node_nproc_overview( j )
           m = m + 1
-          offset = (m-1) * tfft%small_chunks(tfft%which) * batch_size
-          DO k = tfft%thread_z_start( mythread+1, remswitch, parai%me+1, tfft%which ), tfft%thread_z_end( mythread+1, remswitch, parai%me+1, tfft%which )
-             kfrom = offset + tfft%nr3px * mod( k-1, nss(parai%me+1) ) + ( (k-1) / nss(parai%me+1) ) * tfft%small_chunks(tfft%which)
+          offset = (m-1) * tfft%small_chunks(tfft%sparse) * batch_size
+          DO k = tfft%thread_z_start( mythread+1, remswitch, parai%me+1, tfft%sparse ), tfft%thread_z_end( mythread+1, remswitch, parai%me+1, tfft%sparse )
+             kfrom = offset + tfft%nr3px * mod( k-1, nss(parai%me+1) ) + ( (k-1) / nss(parai%me+1) ) * tfft%small_chunks(tfft%sparse)
              DO i = 1, tfft%nr3p( m )
                 aux( tfft%nr3p_offset( m ) + i, k ) = comm_mem_recv( kfrom + i ) * factor
              ENDDO
@@ -1473,11 +1473,11 @@ CONTAINS
   !------------------------------------------------------
   !------------z-FFT Start-------------------------------
 
-    CALL mltfft_fftw_threadsafe('n','n',aux( : , tfft%thread_z_start( mythread+1, remswitch, parai%me+1, tfft%which ) : tfft%thread_z_end( mythread+1, remswitch, parai%me+1, tfft%which ) ), &
-                     fpar%kr3s, tfft%thread_z_sticks(mythread+1,remswitch,parai%me+1,tfft%which), &
-                     aux( : , tfft%thread_z_start( mythread+1, remswitch, parai%me+1, tfft%which ) : tfft%thread_z_end( mythread+1, remswitch, parai%me+1, tfft%which ) ), &
-                     fpar%kr3s, tfft%thread_z_sticks(mythread+1,remswitch,parai%me+1,tfft%which), &
-                     fpar%kr3s, tfft%thread_z_sticks(mythread+1,remswitch,parai%me+1,tfft%which),1,scal,.FALSE.,mythread,parai%ncpus_FFT)
+    CALL mltfft_fftw_threadsafe('n','n',aux( : , tfft%thread_z_start( mythread+1, remswitch, parai%me+1, tfft%sparse ) : tfft%thread_z_end( mythread+1, remswitch, parai%me+1, tfft%sparse ) ), &
+                     fpar%kr3s, tfft%thread_z_sticks(mythread+1,remswitch,parai%me+1,tfft%sparse), &
+                     aux( : , tfft%thread_z_start( mythread+1, remswitch, parai%me+1, tfft%sparse ) : tfft%thread_z_end( mythread+1, remswitch, parai%me+1, tfft%sparse ) ), &
+                     fpar%kr3s, tfft%thread_z_sticks(mythread+1,remswitch,parai%me+1,tfft%sparse), &
+                     fpar%kr3s, tfft%thread_z_sticks(mythread+1,remswitch,parai%me+1,tfft%sparse),1,scal,.FALSE.,mythread,parai%ncpus_FFT)
 
   !-------------z-FFT End--------------------------------
   !------------------------------------------------------

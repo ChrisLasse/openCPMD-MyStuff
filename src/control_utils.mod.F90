@@ -3757,19 +3757,20 @@ CONTAINS
                 READ(iunit,'(A)',iostat=ierr) line
                 CALL readsi(line,1,last,a2a_msgsize,erread)
              ELSEIF ( keyword_contains(line,'TUNE_FFT_BATCHSIZE') ) THEN
-                IF ( keyword_contains(line,'OFF') ) THEN
-                   cntl%fft_tune_batchsize=.FALSE.
-                ELSE
-                   cntl%fft_tune_batchsize=.TRUE.
-                   READ(iunit,'(A)',iostat=ierr) line
-                   CALL readsi(line,1,last,cnti%fft_tune_it_per_batch,erread)
-                   cnti%fft_tune_it_per_batch=cnti%fft_tune_it_per_batch+1
-                   IF (erread) THEN
-                      error_message        = "ERROR WHILE READING VALUE"
-                      something_went_wrong = .true.
-                      go_on_reading        = .false.
+                IF ( .not. cntl%fft_prescribe_batchsize ) THEN
+                   IF ( keyword_contains(line,'OFF') ) THEN
+                      cntl%fft_tune_batchsize=.FALSE.
+                   ELSE
+                      cntl%fft_tune_batchsize=.TRUE.
+                      READ(iunit,'(A)',iostat=ierr) line
+                      CALL readsi(line,1,last,cnti%fft_tune_it_per_batch,erread)
+                      cnti%fft_tune_it_per_batch=cnti%fft_tune_it_per_batch+1
+                      IF (erread) THEN
+                         error_message        = "ERROR WHILE READING VALUE"
+                         something_went_wrong = .true.
+                         go_on_reading        = .false.
+                      ENDIF
                    ENDIF
-                   
                 ENDIF
              ELSEIF ( keyword_contains(line,'PRESCRIBE_BATCHSIZE') ) THEN
                 cntl%fft_prescribe_batchsize=.TRUE.
